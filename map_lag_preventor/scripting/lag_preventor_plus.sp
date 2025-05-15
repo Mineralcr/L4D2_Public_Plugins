@@ -1,4 +1,6 @@
 /**
+ * 原版: https://forums.alliedmods.net/showthread.php?t=334463
+ * 
  * phys_bone_follower 是一個實體，會占Server空間的2048個位子
  * 由prop_dynamic_override或是prop_dynamic所產生的延伸實體 (通常產生數十個)
  * 用於環繞物件產生更貼近物體的碰撞體積
@@ -116,6 +118,7 @@ Action Timer_DelaySDK(Handle Timer, int ref)
     if (entity == INVALID_ENT_REFERENCE)
         return Plugin_Continue;
 
+    SDKUnhook(entity, SDKHook_TouchPost, SDK_OnTouchPost);
     SDKHook(entity, SDKHook_TouchPost, SDK_OnTouchPost);
     return Plugin_Continue;
 }
