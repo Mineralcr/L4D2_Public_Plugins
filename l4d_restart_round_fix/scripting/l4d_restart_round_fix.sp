@@ -95,6 +95,7 @@ MRESReturn Detour_Director_GetThreatType_Post(DHookReturn hReturn)
         {
             hReturn.Value = 7;
             g_iChangeNum++;
+            return MRES_Override;
         }
     }
     else
@@ -103,9 +104,10 @@ MRESReturn Detour_Director_GetThreatType_Post(DHookReturn hReturn)
         {
             hReturn.Value = 8;
             g_iChangeNum--;
+            return MRES_Override;
         }
     }
-    return MRES_Override;
+    return MRES_Ignored;
 }
 
 void Event_RoundStartPre(Event event, const char[] name, bool dontBroadcast)
