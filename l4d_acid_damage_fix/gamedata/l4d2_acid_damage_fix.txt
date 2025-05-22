@@ -1,0 +1,88 @@
+
+"Games"
+{
+	"left4dead2"
+	{
+		"Functions"
+		{
+			"CInferno::IsTouching"
+			{
+				"signature"		"CInferno_IsTouching"
+				"callconv"		"thiscall"
+				"return"		"int"
+				"this"			"entity"
+				"arguments"
+				{
+					"a1"
+					{
+						"type"	"cbaseentity"
+					}
+					"a2"
+					{
+						"type"	"float"
+					}
+					"a3"
+					{
+						"type"	"bool"
+					}
+				}
+			}
+
+			"CInferno::Spread"
+			{
+				"signature"		"CInferno_Spread"
+				"callconv"		"thiscall"
+				"return"		"int"
+				"this"			"entity"
+				"arguments"
+				{
+					"a1"
+					{
+						"type"	"vectorptr"
+					}
+				}
+			}
+
+			"CInsectSwarm::CanHarm"
+			{
+				"signature"		"CInsectSwarm_CanHarm"
+				"callconv"		"thiscall"
+				"return"		"int"
+				"this"			"entity"
+				"arguments"
+				{
+					"CBaseEntity"
+					{
+						"type"	"cbaseentity"
+					}
+				}
+			}
+		}
+
+
+		"Signatures"
+		{
+			"CInferno_IsTouching"  // search by 洛琪 0.33333334  CInferno::InfernoThink (damage)
+			{
+				"library"	"server"
+				"linux"		"@_ZNK8CInferno10IsTouchingEP11CBaseEntityfb"
+				"windows"	"\x55\x8B\xEC\x83\xEC\x7C\xA1\x2A\x2A\x2A\x2A\x33\xC5\x89\x45\xFC\x53\x56\x8B\x75\x08"
+			}
+
+			"CInferno_Spread"  //Inferno.Fire.Ignite
+			{
+				"library"	"server"
+				"linux"		"@_ZN8CInferno6SpreadERK6Vector"
+				"windows"	"\x2A\x2A\x2A\x2A\x2A\x2A\x83\x2A\x2A\x83\x2A\x2A\x55\x8B\x2A\x2A\x89\x2A\x2A\x2A\x8B\x2A\x81\x2A\x2A\x2A\x2A\x2A\xA1\x2A\x2A\x2A\x2A\x33\x2A\x89\x2A\x2A\x8B\x2A\x2A\x56\x57\x8B\x2A\xF3\x2A\x2A\x2A\x2A\x2A\x2A\x2A\x0F\x2F"
+			}
+
+			"CInsectSwarm_CanHarm"
+			{
+				"library"	"server"
+				"linux"		"@_ZNK12CInsectSwarm7CanHarmEP11CBaseEntity"
+				"windows"	"\x2A\x2A\x2A\x2A\x2A\x2A\x2A\x8B\x2A\x8B\x2A\x2A\x2A\x2A\x2A\x8B\x2A\xFF\x2A\x84\x2A\x74\x2A\x8B\x2A\xE8\x2A\x2A\x2A\x2A\x50\xE8\x2A\x2A\x2A\x2A\x83\x2A\x2A\x5E\x5D"
+				
+			}
+		}
+	}
+}
