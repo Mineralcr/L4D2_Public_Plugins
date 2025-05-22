@@ -176,7 +176,7 @@ Action OnTakeDamage(int entity, int &attacker, int &inflictor, float &damage, in
             }
             else
             {
-                if (AcidTime[entity][inflictor] + 1.0 < GetGameTime())
+                if (AcidTime[entity][inflictor] + 1.1 < GetGameTime())
                 {
                     AcidTime[entity][inflictor]  = GetGameTime();
                     AcidTwice[entity][inflictor] = 0;
