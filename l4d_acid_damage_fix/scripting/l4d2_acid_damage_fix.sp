@@ -10,10 +10,10 @@ float
     g_fRangePercent;
 int
     g_iPlugins,
-    AcidTypeNum[MAXENTITYS + 1];
+    AcidTypeNum[MAXENTITYS + 1],
+    AcidTwice[MAXPLAYERS + 1][MAXENTITYS + 1];
 bool
     g_bCloseFix;
-AcidTwice[MAXPLAYERS + 1][MAXENTITYS + 1];
 
 ConVar
     g_cvPluginEnable,
