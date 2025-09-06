@@ -4,14 +4,13 @@
 #include <sourcemod>
 #include <sdkhooks>
 #include <sdktools>
+#include <clientprefs>
 
 #define PLUGIN_VERSION  "1.1"
 #define SPRITE_MATERIAL "materials/sprites/laserbeam.vmt"
 #define DMG_HEADSHOT    1 << 30
 #define L4D2_MAXPLAYERS 32
 #define ZC_CHARGER      6
-
-int g_sprite;
 
 enum struct PlayerSetData
 {
@@ -38,10 +37,14 @@ ConVar
     g_hcvar_gap;
 
 int
+    g_sprite,
     g_iMode;
 float
     g_fsize,
     g_fgap;
+
+Cookie 
+    g_cPlayerSettings;
 
 static const int color[][] = {
     {0,    255, 0,   100}, // 绿色
@@ -81,9 +84,10 @@ public void OnPluginStart()
     g_hcvar_size.AddChangeHook(ConVarChanged);
     g_hcvar_gap.AddChangeHook(ConVarChanged);
 
+    g_cPlayerSettings = new Cookie("l4d_damage_show_set", "damage show settings", CookieAccess_Protected);
     AutoExecConfig(true, "l4d2_damage_show");
     HookEvent("player_left_safe_area", Event_LeftSafeArea, EventHookMode_PostNoCopy);
-    InItVarNum(-1);
+    InItVarNum();
 }
 
 public void OnConfigsExecuted()
@@ -108,26 +112,15 @@ public void OnMapStart()
     g_sprite = PrecacheModel(SPRITE_MATERIAL, true);
 }
 
-void InItVarNum(int client)
+void InItVarNum()
 {
-    if(client == -1)
+    for (int i = 0; i <= L4D2_MAXPLAYERS; i++)
     {
-        for (int i = 0; i <= L4D2_MAXPLAYERS; i++)
-        {
-            PlayerDataArray[i].wpn_id        = -1;
-            PlayerDataArray[i].wpn_type      = -1;
-            PlayerDataArray[i].plugin_switch = true;
-            PlayerDataArray[i].show_other    = false;
-            PlayerDataArray[i].last_set_time = 0.0;
-        }
-    }
-    else
-    {
-        PlayerDataArray[client].wpn_id        = -1;
-        PlayerDataArray[client].wpn_type      = -1;
-        PlayerDataArray[client].plugin_switch = true;
-        PlayerDataArray[client].show_other    = false;
-        PlayerDataArray[client].last_set_time = 0.0;
+        PlayerDataArray[i].wpn_id        = -1;
+        PlayerDataArray[i].wpn_type      = -1;
+        PlayerDataArray[i].plugin_switch = true;
+        PlayerDataArray[i].show_other    = false;
+        PlayerDataArray[i].last_set_time = 0.0;
     }
     g_hcvar_maxtempentities.SetInt(512);
 }
@@ -135,6 +128,38 @@ void InItVarNum(int client)
 void Event_LeftSafeArea(Event event, const char[] name, bool dontBroadcast)
 {
     PrintToChatAll("\x04[伤害显示]:\x05同时按下Tab键+R键可切换伤害显示模式.");
+}
+
+public void OnClientCookiesCached(int client)
+{
+    if (IsFakeClient(client))
+        return;
+
+    char cookie[2];
+    g_cPlayerSettings.Get(client, cookie, sizeof(cookie));
+
+    if (cookie[0] != 0)
+    {
+        int c_var = StringToInt(cookie);
+        switch (c_var)
+        {
+            case 1:
+            {
+                PlayerDataArray[client].plugin_switch = false;
+                PlayerDataArray[client].show_other    = false;
+            }
+            case 2:
+            {
+                PlayerDataArray[client].plugin_switch = true;
+                PlayerDataArray[client].show_other    = false;
+            }
+            case 3:
+            {
+                PlayerDataArray[client].plugin_switch = true;
+                PlayerDataArray[client].show_other = true;
+            }
+        }
+    }
 }
 
 public void OnPlayerRunCmdPost(int client, int buttons)
@@ -147,6 +172,7 @@ public void OnPlayerRunCmdPost(int client, int buttons)
             PlayerDataArray[client].plugin_switch = true;
             PlayerDataArray[client].show_other    = false;
             PrintToChat(client, "\x04[伤害显示]\x05当前模式:伤害显示开、他人显示关.");
+            g_cPlayerSettings.Set(client, "2");
         }
         else
         {
@@ -154,12 +180,14 @@ public void OnPlayerRunCmdPost(int client, int buttons)
             {
                 PlayerDataArray[client].show_other = true;
                 PrintToChat(client, "\x04[伤害显示]\x05当前模式:伤害显示开、他人显示开.");
+                g_cPlayerSettings.Set(client, "3");
             }
             else
             {
                 PlayerDataArray[client].plugin_switch = false;
                 PlayerDataArray[client].show_other    = false;
                 PrintToChat(client, "\x04[伤害显示]\x05当前模式:伤害显示关.");
+                g_cPlayerSettings.Set(client, "1");
             }
         }
     }
@@ -167,7 +195,6 @@ public void OnPlayerRunCmdPost(int client, int buttons)
 
 public void OnClientPutInServer(int client)
 {
-    InItVarNum(client);
     SDKHook(client, SDKHook_OnTakeDamagePost, SDK_OnTakeDamagePost);
 }
 
