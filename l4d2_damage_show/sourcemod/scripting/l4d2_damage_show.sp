@@ -423,7 +423,7 @@ void DrawNumber(float StartPos[3], float EndPos[3], int number, const int[] clie
         case 9:
         {
             Ptid[totalPt++] = 0, Ptid[totalPt++] = 1, Ptid[totalPt++] = 1, Ptid[totalPt++] = 5;
-            Ptid[totalPt++] = 3, Ptid[totalPt++] = 2, Ptid[totalPt++] = 2, Ptid[totalPt++] = 0, Ptid[totalPt++] = 2, Ptid[totalPt++] = 5;
+            Ptid[totalPt++] = 3, Ptid[totalPt++] = 2, Ptid[totalPt++] = 2, Ptid[totalPt++] = 0, Ptid[totalPt++] = 4, Ptid[totalPt++] = 5;
         }
     }
 
