@@ -563,6 +563,15 @@ void NextFrame_ShowShotgunDamage(DataPack pack)
 void DisplayDamage(int victim, int attacker, int weapon, float damage, int damagetype, const float damagePosition[3], bool forceHeadshot = false, bool UpdateFrame = false)
 {
     int zombieClass = GetEntProp(victim, Prop_Send, "m_zombieClass");
+    float f_damage = damage;
+    if (zombieClass == ZC_CHARGER)
+    {
+        int abilityEnt = GetEntPropEnt(victim, Prop_Send, "m_customAbility");
+        if (IsValidEntity(abilityEnt) && GetEntProp(abilityEnt, Prop_Send, "m_isCharging") > 0 && IsPlayerAlive(victim))
+        {
+            f_damage = f_damage / 3.0;
+        }
+    }
     if (g_iadd == 1 && !UpdateFrame)
     {
         if (!g_SumShowMode[attacker][victim].needShow || !g_SumShowMode[attacker][0].needShow)
@@ -570,11 +579,11 @@ void DisplayDamage(int victim, int attacker, int weapon, float damage, int damag
             g_SumShowMode[attacker][victim].needShow     = true;
             g_SumShowMode[attacker][0].needShow          = true;
             g_SumShowMode[attacker][victim].lastShowTime = 0.0;
-            g_SumShowMode[attacker][victim].totalDamage  = RoundToFloor(damage);
+            g_SumShowMode[attacker][victim].totalDamage  = RoundToFloor(f_damage);
             g_bNeverFire[attacker]                       = false;
         }
         else
-            g_SumShowMode[attacker][victim].totalDamage += RoundToFloor(damage);
+            g_SumShowMode[attacker][victim].totalDamage += RoundToFloor(f_damage);
         g_SumShowMode[attacker][victim].damagePosition[0] = damagePosition[0];
         g_SumShowMode[attacker][victim].damagePosition[1] = damagePosition[1];
         g_SumShowMode[attacker][victim].damagePosition[2] = damagePosition[2];
@@ -611,21 +620,12 @@ void DisplayDamage(int victim, int attacker, int weapon, float damage, int damag
         }
     }
 
-    float f_damage = damage;
     if (zombieClass == ZC_TANK && (GetEntProp(victim, Prop_Send, "m_isIncapacitated") == 1 || g_fTankIncap[victim] + 1.0 > GetGameTime()))
     {
         g_fTankIncap[victim] = GetGameTime();
         return;
     }
 
-    if (zombieClass == ZC_CHARGER)
-    {
-        int abilityEnt = GetEntPropEnt(victim, Prop_Send, "m_customAbility");
-        if (IsValidEntity(abilityEnt) && GetEntProp(abilityEnt, Prop_Send, "m_isCharging") > 0 && IsPlayerAlive(victim))
-        {
-            f_damage = f_damage / 3.0;
-        }
-    }
     int val = RoundToFloor(f_damage);
     if (val < 2 && PlayerDataArray[attacker].wpn_type == 5)
         return;
