@@ -5,7 +5,10 @@
 #include <sdkhooks>
 #include <sdktools>
 #include <clientprefs>
-/*ver1.2-----------------------------------------
+/*
+ver1.3-----------------------------------------
+    1.新增伤害累加显示功能,单个生物累计显示伤害
+ver1.2-----------------------------------------
     1.新增霰弹枪伤害合并处理功能
     2.新增数字偏移调整功能
     3.新增字体透明度、伤害显示距离上限限制功能
@@ -22,6 +25,7 @@
 #define ZC_BOOMER       2
 #define ZC_CHARGER      6
 #define ZC_TANK         8
+#define UPDATE_INTERVAL 0.1    // 累加模式下，帧更新间隔时间,不要低于0.05，不然游戏会近似认为是0，发送的TE永远存在
 
 enum struct PlayerSetData
 {
@@ -50,11 +54,26 @@ enum struct ShotgunDamageData
     bool  isCreated;
 }
 
+enum struct SumShowMode
+{
+    bool  needShow;
+    int   totalDamage;
+    int   damageType;
+    int   weapon;
+    bool  isHeadshot;
+    float damagePosition[3];
+    float lastShowTime;
+    float lastHitTime;
+}
+
 PlayerSetData
     PlayerDataArray[L4D2_MAXPLAYERS + 1];
 
 ShotgunDamageData
     g_ShotgunDamageBuffer[L4D2_MAXPLAYERS + 1][L4D2_MAXPLAYERS + 1];    // [attacker][victim]
+
+SumShowMode
+    g_SumShowMode[L4D2_MAXPLAYERS + 1][L4D2_MAXPLAYERS + 1];
 
 ConVar
     g_hcvar_maxtempentities,
@@ -65,13 +84,18 @@ ConVar
     g_hcvar_shotgun_merge,
     g_hcvar_x_offset,
     g_hcvar_y_offset,
-    g_hcvar_show_distance;
+    g_hcvar_show_distance,
+    g_hcvar_mode_add;
+
+bool
+    g_bNeverFire[L4D2_MAXPLAYERS + 1];
 
 int
     g_sprite,
     g_iMode,
     g_iAlpha,
     g_iShotgunMerge,
+    g_iadd,
     g_iVitcimHealth[L4D2_MAXPLAYERS + 1][L4D2_MAXPLAYERS + 1];
 float
     g_fsize,
@@ -82,14 +106,14 @@ float
     g_fTankIncap[L4D2_MAXPLAYERS + 1];
 
 Cookie
-    g_cPlayerSettings;
+                 g_cPlayerSettings;
 
 static const int color[][] = {
-    {0,    255, 0}, // 绿色
-    { 255, 255, 0}, // 黄色
+    {0,    255, 0  }, // 绿色
+    { 255, 255, 0  }, // 黄色
     { 255, 255, 255}, // 白色
     { 0,   255, 255}, // 蓝色
-    { 255, 0,   0}  // 红色
+    { 255, 0,   0  }  // 红色
 };
 
 public Plugin myinfo =
@@ -123,6 +147,7 @@ public void OnPluginStart()
     g_hcvar_x_offset        = CreateConVar("cf_hint_x_offset", "20.0", "伤害显示位置基于受伤点的x偏移距离", FCVAR_NONE, true, -100.0, true, 100.0);
     g_hcvar_y_offset        = CreateConVar("cf_hint_y_offset", "10.0", "伤害显示位置基于受伤点的y偏移距离", FCVAR_NONE, true, -100.0, true, 100.0);
     g_hcvar_show_distance   = CreateConVar("cf_hint_show_distance", "1500.0", "超过多远距离后不显示伤害数字?开镜状态下例外", FCVAR_NONE, true, 0.0, true, 8192.0);
+    g_hcvar_mode_add        = CreateConVar("cf_hint_mode_add", "1", "是否开启伤害累加显示模式?0关闭1开启[此选项可能对性能带宽消耗较大]", FCVAR_NONE, true, 0.0, true, 1.0);
     g_hcvar_plugin_mode.AddChangeHook(ConVarChanged);
     g_hcvar_size.AddChangeHook(ConVarChanged);
     g_hcvar_gap.AddChangeHook(ConVarChanged);
@@ -131,6 +156,7 @@ public void OnPluginStart()
     g_hcvar_x_offset.AddChangeHook(ConVarChanged);
     g_hcvar_y_offset.AddChangeHook(ConVarChanged);
     g_hcvar_show_distance.AddChangeHook(ConVarChanged);
+    g_hcvar_mode_add.AddChangeHook(ConVarChanged);
 
     g_cPlayerSettings = new Cookie("l4d_damage_show_set", "damage show settings", CookieAccess_Protected);
     AutoExecConfig(true, "l4d2_damage_show");
@@ -150,13 +176,14 @@ public void ConVarChanged(ConVar convar, const char[] oldValue, const char[] new
 
 void GetCvars()
 {
-    g_iMode         = g_hcvar_plugin_mode.IntValue;
-    g_fsize         = g_hcvar_size.FloatValue;
-    g_fgap          = g_hcvar_gap.FloatValue;
-    g_iAlpha        = g_hcvar_alpha.IntValue;
-    g_iShotgunMerge = g_hcvar_shotgun_merge.IntValue;
-    g_f_x_offset    = g_hcvar_x_offset.FloatValue;
-    g_f_y_offset    = g_hcvar_y_offset.FloatValue;
+    g_iMode           = g_hcvar_plugin_mode.IntValue;
+    g_fsize           = g_hcvar_size.FloatValue;
+    g_fgap            = g_hcvar_gap.FloatValue;
+    g_iAlpha          = g_hcvar_alpha.IntValue;
+    g_iShotgunMerge   = g_hcvar_shotgun_merge.IntValue;
+    g_iadd            = g_hcvar_mode_add.IntValue;
+    g_f_x_offset      = g_hcvar_x_offset.FloatValue;
+    g_f_y_offset      = g_hcvar_y_offset.FloatValue;
     g_f_show_distance = g_hcvar_show_distance.FloatValue;
 }
 
@@ -174,7 +201,8 @@ void InItVarNum()
         PlayerDataArray[i].plugin_switch = true;
         PlayerDataArray[i].show_other    = false;
         PlayerDataArray[i].last_set_time = 0.0;
-        g_fTankIncap[i] = 0.0;
+        g_fTankIncap[i]                  = 0.0;
+        g_bNeverFire[i]                  = true;
 
         for (int j = 0; j <= L4D2_MAXPLAYERS; j++)
         {
@@ -183,6 +211,9 @@ void InItVarNum()
             g_ShotgunDamageBuffer[i][j].totalDamage = 0;
             g_ShotgunDamageBuffer[i][j].isHeadshot  = false;
             g_ShotgunDamageBuffer[i][j].isCreated   = false;
+            g_SumShowMode[i][j].needShow            = false;
+            g_SumShowMode[i][j].totalDamage         = 0;
+            g_SumShowMode[i][j].lastShowTime        = 0.0;
             g_iVitcimHealth[i][j]                   = 0;
         }
     }
@@ -274,11 +305,12 @@ void SDK_OnTakeDamagePost(int victim, int attacker, int inflictor, float damage,
 
         if (g_iMode == 3 || g_iMode & (1 << 0) && GetClientTeam(victim) == 3 || g_iMode & (1 << 1) && GetClientTeam(victim) == 2)
         {
-            float f_dmg = damage;
+            float f_dmg           = damage;
+            bool  b_forceHeadshot = false;
             if (IsPlayerAlive(victim))
             {
                 int current_hp = GetClientHealth(victim);
-                if(damagetype & DMG_BURN || damagetype & DMG_PREVENT_PHYSICS_FORCE || damagetype & DMG_DIRECT)
+                if (damagetype & DMG_BURN || damagetype & DMG_PREVENT_PHYSICS_FORCE || damagetype & DMG_DIRECT)
                 {
                     if (g_iVitcimHealth[attacker][victim] == 0)
                         f_dmg = float(GetEntProp(victim, Prop_Data, "m_iMaxHealth") - current_hp);
@@ -286,7 +318,7 @@ void SDK_OnTakeDamagePost(int victim, int attacker, int inflictor, float damage,
                         f_dmg = float(g_iVitcimHealth[attacker][victim] - current_hp);
                 }
                 g_iVitcimHealth[attacker][victim] = current_hp;
-            }    
+            }
             else
             {
                 if (g_iVitcimHealth[attacker][victim] == 0)
@@ -294,14 +326,14 @@ void SDK_OnTakeDamagePost(int victim, int attacker, int inflictor, float damage,
                 else
                     f_dmg = float(g_iVitcimHealth[attacker][victim]);
                 g_iVitcimHealth[attacker][victim] = 0;
+                b_forceHeadshot                   = true;
             }
 
-            
             int wpn = weapon == -1 ? inflictor : weapon;
             if (g_iShotgunMerge == 1 && damagetype & DMG_BUCKSHOT)
-                HandleShotgunDamage(victim, attacker, wpn, f_dmg, damagetype, damagePosition);
+                HandleShotgunDamage(victim, attacker, wpn, f_dmg, damagetype, damagePosition, b_forceHeadshot);
             else
-                DisplayDamage(victim, attacker, wpn, f_dmg, damagetype, damagePosition);
+                DisplayDamage(victim, attacker, wpn, f_dmg, damagetype, damagePosition, b_forceHeadshot);
         }
     }
 }
@@ -373,11 +405,11 @@ ReturnTwoFloat CalculatePoint(int client, float basePoint[3], float x1, float y1
 
 void DrawNumber(float StartPos[3], float EndPos[3], int number, const int[] clients, int totals, float life, int colors[4], int speed, float width, float size)
 {
-    int totalPt     = 0;
-    int[] Ptid = new int[18];
-    switch(number)
+    int totalPt = 0;
+    int[] Ptid  = new int[18];
+    switch (number)
     {
-        case 0: 
+        case 0:
         {
             Ptid[totalPt++] = 1, Ptid[totalPt++] = 5, Ptid[totalPt++] = 0, Ptid[totalPt++] = 4;
             Ptid[totalPt++] = 0, Ptid[totalPt++] = 1, Ptid[totalPt++] = 4, Ptid[totalPt++] = 5;
@@ -433,9 +465,9 @@ void DrawNumber(float StartPos[3], float EndPos[3], int number, const int[] clie
     fArray[3] = EndPos, fArray[3][2] = EndPos[2] + size;
     fArray[4] = StartPos, fArray[4][2] = EndPos[2];
     fArray[0] = StartPos, fArray[5] = EndPos;
-    for(int k = 0; k < 9; k++)
+    for (int k = 0; k < 9; k++)
     {
-        if(2 * k + 1 > totalPt)
+        if (2 * k + 1 > totalPt)
             break;
         TE_SetupBeamPoints(fArray[Ptid[2 * k]], fArray[Ptid[2 * k + 1]], g_sprite, 0, 0, 0, life, width, width, 1, 0.0, colors, speed);
         TE_Send(clients, totals, 0.0);
@@ -468,13 +500,12 @@ stock int GetWpnType(int weapon)
     return 3;
 }
 
-void HandleShotgunDamage(int victim, int attacker, int weapon, float damage, int damagetype, const float damagePosition[3])
+void HandleShotgunDamage(int victim, int attacker, int weapon, float damage, int damagetype, const float damagePosition[3], bool b_forceHeadshot)
 {
-    bool isHeadshot = (damagetype & DMG_HEADSHOT) != 0;
     if (g_ShotgunDamageBuffer[attacker][victim].isCreated)
     {
         g_ShotgunDamageBuffer[attacker][victim].totalDamage += RoundToFloor(damage);    // 出于数据准确性考虑，这也是游戏的计算方式
-        if (isHeadshot)
+        if (b_forceHeadshot)
             g_ShotgunDamageBuffer[attacker][victim].isHeadshot = true;
     }
     else
@@ -484,7 +515,7 @@ void HandleShotgunDamage(int victim, int attacker, int weapon, float damage, int
         g_ShotgunDamageBuffer[attacker][victim].totalDamage       = RoundToFloor(damage);
         g_ShotgunDamageBuffer[attacker][victim].damageType        = damagetype;
         g_ShotgunDamageBuffer[attacker][victim].weapon            = weapon;
-        g_ShotgunDamageBuffer[attacker][victim].isHeadshot        = isHeadshot;
+        g_ShotgunDamageBuffer[attacker][victim].isHeadshot        = b_forceHeadshot;
 
         g_ShotgunDamageBuffer[attacker][victim].damagePosition[0] = damagePosition[0];
         g_ShotgunDamageBuffer[attacker][victim].damagePosition[1] = damagePosition[1];
@@ -529,8 +560,40 @@ void NextFrame_ShowShotgunDamage(DataPack pack)
     g_ShotgunDamageBuffer[attacker][victim].isCreated = false;
 }
 
-void DisplayDamage(int victim, int attacker, int weapon, float damage, int damagetype, const float damagePosition[3], bool forceHeadshot = false)
+void DisplayDamage(int victim, int attacker, int weapon, float damage, int damagetype, const float damagePosition[3], bool forceHeadshot = false, bool UpdateFrame = false)
 {
+    int zombieClass = GetEntProp(victim, Prop_Send, "m_zombieClass");
+    if (g_iadd == 1 && !UpdateFrame)
+    {
+        if (!g_SumShowMode[attacker][victim].needShow || !g_SumShowMode[attacker][0].needShow)
+        {
+            g_SumShowMode[attacker][victim].needShow     = true;
+            g_SumShowMode[attacker][0].needShow          = true;
+            g_SumShowMode[attacker][victim].lastShowTime = 0.0;
+            g_SumShowMode[attacker][victim].totalDamage  = RoundToFloor(damage);
+            g_bNeverFire[attacker]                       = false;
+        }
+        else
+            g_SumShowMode[attacker][victim].totalDamage += RoundToFloor(damage);
+        g_SumShowMode[attacker][victim].damagePosition[0] = damagePosition[0];
+        g_SumShowMode[attacker][victim].damagePosition[1] = damagePosition[1];
+        g_SumShowMode[attacker][victim].damagePosition[2] = damagePosition[2];
+        g_SumShowMode[attacker][victim].damageType        = damagetype;
+        g_SumShowMode[attacker][victim].weapon            = weapon;
+        g_SumShowMode[attacker][victim].isHeadshot        = forceHeadshot;
+        float now_time                                    = GetGameTime();
+        if (IsPlayerAlive(victim))
+        {
+            if (zombieClass == ZC_TANK)
+                now_time = now_time + 3.0;
+            else if (PlayerDataArray[attacker].wpn_type == 3)
+                now_time = now_time + 0.5;
+        }
+        g_SumShowMode[attacker][victim].lastHitTime = now_time;
+        g_SumShowMode[attacker][0].lastHitTime      = now_time;    // 最新
+        return;
+    }
+
     if (PlayerDataArray[attacker].wpn_id != weapon)
     {
         PlayerDataArray[attacker].wpn_id   = weapon;
@@ -548,8 +611,7 @@ void DisplayDamage(int victim, int attacker, int weapon, float damage, int damag
         }
     }
 
-    float f_damage    = damage;
-    int   zombieClass = GetEntProp(victim, Prop_Send, "m_zombieClass");
+    float f_damage = damage;
     if (zombieClass == ZC_TANK && (GetEntProp(victim, Prop_Send, "m_isIncapacitated") == 1 || g_fTankIncap[victim] + 1.0 > GetGameTime()))
     {
         g_fTankIncap[victim] = GetGameTime();
@@ -565,17 +627,17 @@ void DisplayDamage(int victim, int attacker, int weapon, float damage, int damag
         }
     }
     int val = RoundToFloor(f_damage);
-    if(val < 2 && PlayerDataArray[attacker].wpn_type == 5)
+    if (val < 2 && PlayerDataArray[attacker].wpn_type == 5)
         return;
-    
+
     int colors[4], colorIndex;
     if ((damagetype & DMG_HEADSHOT) || forceHeadshot)
         colorIndex = 4;
-    else if(GetClientTeam(victim) == 2)
+    else if (GetClientTeam(victim) == 2)
         colorIndex = 0;
     else
-        colorIndex = GetRandomInt(1, 3);
-    for(int i = 0; i < 3; i++)
+        colorIndex = 2;    // GetRandomInt(1, 3)
+    for (int i = 0; i < 3; i++)
         colors[i] = color[colorIndex][i];
     colors[3] = g_iAlpha;
 
@@ -589,8 +651,10 @@ void DisplayDamage(int victim, int attacker, int weapon, float damage, int damag
         case 4: life = 0.1;
         case 5: life = 1.5;
     }
-    if(zombieClass == ZC_BOOMER)
+    if (zombieClass == ZC_BOOMER)
         life = life < 0.5 ? 0.5 : life;
+    if (UpdateFrame)
+        life = UPDATE_INTERVAL;
 
     float z_distance = 40.0, distance, gap, size, width, vecPos[3], vecOrg[3];
     GetEntPropVector(attacker, Prop_Send, "m_vecOrigin", vecPos);
@@ -599,19 +663,23 @@ void DisplayDamage(int victim, int attacker, int weapon, float damage, int damag
     size     = g_fsize;
     width    = 0.8;
     distance = GetVectorDistance(vecPos, vecOrg, true);
-    if(distance > g_f_show_distance * g_f_show_distance && GetEntProp(attacker, Prop_Send, "m_hZoomOwner") == -1)
+    if (distance > g_f_show_distance * g_f_show_distance && GetEntProp(attacker, Prop_Send, "m_hZoomOwner") == -1)
         return;
-    
-    if (distance <= 60.0 * 60.0)
+
+    bool is_near = false;
+    if (distance <= 120.0 * 120.0)
     {
-        gap        = gap / 2.0;
-        size       = size / 2.0;
-        z_distance = 1.0;
-        width      = 0.4;
+        float scale = 120.0 * 120.0 / distance;
+        scale       = scale < 4.0 ? scale : 4.0;
+        gap         = gap / scale;
+        size        = size / scale;
+        z_distance  = 1.0;
+        width       = 0.8 / scale;
+        is_near     = true;
     }
-    else if (distance > 60.0 * 60.0 * 100.0)
+    else if (distance > 70.0 * 70.0 * 100.0)
     {
-        float scale = distance / (60.0 * 60.0 * 100.0);
+        float scale = distance / (70.0 * 70.0 * 100.0);
         scale       = scale > 2.0 ? 2.0 : scale;
         gap         = gap * scale;
         size        = size * scale;
@@ -622,9 +690,12 @@ void DisplayDamage(int victim, int attacker, int weapon, float damage, int damag
     damageorg = damagePosition;
     if (damageorg[0] == 0.0 || PlayerDataArray[attacker].wpn_type == 2 || PlayerDataArray[attacker].wpn_type == 5)
     {
-        damageorg    = vecOrg;
-        damageorg[0] = damageorg[0] + GetRandomFloat(-20.0, 20.0);
-        damageorg[1] = damageorg[1] + GetRandomFloat(-20.0, 20.0);
+        damageorg = vecOrg;
+        if (!is_near)
+        {
+            damageorg[0] = damageorg[0] + GetRandomFloat(-20.0, 20.0);
+            damageorg[1] = damageorg[1] + GetRandomFloat(-20.0, 20.0);
+        }
         damageorg[2] = damageorg[2] + 56.0;
     }
 
@@ -632,6 +703,8 @@ void DisplayDamage(int victim, int attacker, int weapon, float damage, int damag
     int   divisor    = 1;
     float half_width = size * float(count) / 2.0, x_start, scale;
     scale            = damagePosition[0] < vecOrg[0] ? -1.0 : 1.0;
+    if (is_near)
+        scale = 0.0;
     for (int i = 1; i < count; i++)
         divisor *= 10;
     for (int i = 0; i < count; i++)
@@ -647,5 +720,42 @@ void DisplayDamage(int victim, int attacker, int weapon, float damage, int damag
         val %= divisor;
         divisor /= 10;
         x_start = x_start - size - gap;
+    }
+}
+
+public void OnGameFrame()
+{
+    if (g_iadd == 1)
+    {
+        for (int i = 1; i <= L4D2_MAXPLAYERS; i++)
+        {
+            if (g_bNeverFire[i])
+                continue;
+
+            if (!IsValidEdict(i) || !IsClientInGame(i) || !IsPlayerAlive(i) || g_SumShowMode[i][0].lastHitTime + 0.5 < GetGameTime())
+            {
+                g_bNeverFire[i]              = true;
+                g_SumShowMode[i][0].needShow = false;
+                continue;
+            }
+
+            for (int j = 1; j <= L4D2_MAXPLAYERS; j++)
+            {
+                if (g_SumShowMode[i][j].needShow && g_SumShowMode[i][j].lastShowTime + UPDATE_INTERVAL < GetGameTime())
+                {
+                    if (g_SumShowMode[i][j].lastHitTime + 0.5 < GetGameTime())
+                    {
+                        g_SumShowMode[i][j].needShow = false;
+                        continue;
+                    }
+                    else
+                    {
+                        DisplayDamage(j, i, g_SumShowMode[i][j].weapon, float(g_SumShowMode[i][j].totalDamage),
+                                      g_SumShowMode[i][j].damageType, g_SumShowMode[i][j].damagePosition, g_SumShowMode[i][j].isHeadshot, true);
+                        g_SumShowMode[i][j].lastShowTime = GetGameTime();
+                    }
+                }
+            }
+        }
     }
 }
