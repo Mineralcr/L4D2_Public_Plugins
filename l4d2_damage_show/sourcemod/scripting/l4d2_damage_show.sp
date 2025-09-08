@@ -18,7 +18,7 @@ ver1.2-----------------------------------------
     7.修复火焰伤害数值不对的问题
     8.修复榴弹造成伤害时，伤害位置显示不对的问题
 */
-#define PLUGIN_VERSION  "1.2"
+#define PLUGIN_VERSION  "1.3"
 #define SPRITE_MATERIAL "materials/sprites/laserbeam.vmt"
 #define DMG_HEADSHOT    1 << 30
 #define L4D2_MAXPLAYERS 32
