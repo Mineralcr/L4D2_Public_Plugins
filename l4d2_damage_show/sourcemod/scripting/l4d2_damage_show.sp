@@ -589,6 +589,9 @@ void NextFrame_ShowShotgunDamage(DataPack pack)
 
 void DisplayDamage(int victim, int attacker, int weapon, int damage, int damagetype, const float damagePosition[3], bool forceHeadshot = false, bool UpdateFrame = false)
 {
+    if(!IsValidClient(victim) || !IsValidClient(attacker))
+        return;
+
     int zombieClass = GetEntProp(victim, Prop_Send, "m_zombieClass");
     if (g_iadd == 1 && !UpdateFrame)
     {
