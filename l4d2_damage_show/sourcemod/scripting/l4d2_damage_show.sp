@@ -589,7 +589,7 @@ void NextFrame_ShowShotgunDamage(DataPack pack)
 
 void DisplayDamage(int victim, int attacker, int weapon, int damage, int damagetype, const float damagePosition[3], bool forceHeadshot = false, bool UpdateFrame = false)
 {
-    if(!IsValidClient(victim) || !IsValidClient(attacker))
+    if(!IsValidClient(attacker) || !IsValidClient(victim))
         return;
 
     int zombieClass = GetEntProp(victim, Prop_Send, "m_zombieClass");
@@ -676,6 +676,12 @@ void DisplayDamage(int victim, int attacker, int weapon, int damage, int damaget
         life = life < 0.5 ? 0.5 : life;
     if (UpdateFrame)
         life = UPDATE_INTERVAL;
+    if(forceHeadshot)
+    {
+        g_SumShowMode[attacker][victim].needShow = false;
+        float temp_life = g_SumShowMode[attacker][victim].lastHitTime + 0.5 - GetGameTime();
+        life = temp_life > 0.5 ? temp_life : 0.5;
+    }
 
     float z_distance = 40.0, distance, gap, size, width, vecPos[3], vecOrg[3];
     GetEntPropVector(attacker, Prop_Send, "m_vecOrigin", vecPos);
