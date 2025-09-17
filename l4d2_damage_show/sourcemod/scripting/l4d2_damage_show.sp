@@ -624,7 +624,7 @@ void DisplayDamage(int victim, int attacker, int weapon, int damage, int damaget
         return;
     }
 
-    if (PlayerDataArray[attacker].wpn_id != weapon)
+    if (PlayerDataArray[attacker].wpn_id != weapon && weapon != -1 && IsValidEdict(weapon))
     {
         PlayerDataArray[attacker].wpn_id   = weapon;
         PlayerDataArray[attacker].wpn_type = GetWpnType(weapon);
