@@ -3,8 +3,6 @@
 
 #include <sourcemod>
 #include <dhooks>
-#include <sdkhooks>
-#include <left4dhooks>
 
 #define GAMEDATA         "l4d2_ignore_airwall"
 #define GAMEDATA_VERSION 34
