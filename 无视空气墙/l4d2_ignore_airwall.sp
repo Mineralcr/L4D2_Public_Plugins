@@ -5,7 +5,7 @@
 #include <dhooks>
 
 #define GAMEDATA         "l4d2_ignore_airwall"
-#define GAMEDATA_VERSION 34
+#define GAMEDATA_VERSION 35
 
 methodmap GameDataWrapper < GameData
 {
@@ -313,16 +313,19 @@ void CheckGameDataFile()
         hFile.WriteLine("		         {");
         hFile.WriteLine("		               \"library\"	    \"server\"");
         hFile.WriteLine("		               \"linux\"	    \"@_ZNK11CBaseEntity13GetTeamNumberEv\"");
+        hFile.WriteLine("		               \"windows\"	    \"\\x8B\\x81\\x38\\x02\\x00\\x00\\xC3\"");
         hFile.WriteLine("			     }");
         hFile.WriteLine("		       \"CTerrorPlayer::PlayerSolidMask\"");
         hFile.WriteLine("		         {");
         hFile.WriteLine("		               \"library\"	    \"server\"");
         hFile.WriteLine("		               \"linux\"	    \"@_ZNK13CTerrorPlayer15PlayerSolidMaskEb\"");
+        hFile.WriteLine("		               \"windows\"	    \"\\x55\\x8B\\xEC\\x53\\x56\\x8B\\xF1\\xE8\\x2A\\x2A\\x2A\\x2A\"");
         hFile.WriteLine("			     }");
         hFile.WriteLine("		       \"CTerrorGameGGMovement::PlayerSolidMask\"");
         hFile.WriteLine("		         {");
         hFile.WriteLine("		               \"library\"	    \"server\"");
         hFile.WriteLine("		               \"linux\"	    \"@_ZNK19CTerrorGameMovement15PlayerSolidMaskEbP11CBasePlayer\"");
+        hFile.WriteLine("		               \"windows\"	    \"\\x55\\x8B\\xEC\\x53\\x56\\x8B\\x75\\x0C\\x57\\x33\\xFF\"");
         hFile.WriteLine("			     }");
         hFile.WriteLine("	    }");
         hFile.WriteLine("	}");
