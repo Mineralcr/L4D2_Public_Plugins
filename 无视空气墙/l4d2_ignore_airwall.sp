@@ -48,12 +48,23 @@ int
 ConVar
     g_hCvar_AirWall;
 
+public Plugin myinfo =
+{
+    name        = "l4d2_ignore_airwall",
+    author      = "洛琪",
+    description = "无视空气墙插件",
+    version     = "1.0",
+    url         = "https://steamcommunity.com/profiles/76561198812009299/"
+};
+
 public void OnPluginStart()
 {
     g_hCvar_AirWall = CreateConVar("l4d2_mask", "1", "开启或关闭本插件", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_hCvar_AirWall.AddChangeHook(OnCvarChnaged);
     RegConsoleCmd("sm_mask", cmdMask);
     InItGameData();
+
+    AutoExecConfig(true, "l4d2_ignore_airwall");
 }
 
 void GetCvars()
@@ -328,4 +339,3 @@ void CheckGameDataFile()
 
     delete hFile;
 }
-
