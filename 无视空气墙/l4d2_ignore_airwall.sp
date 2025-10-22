@@ -239,9 +239,10 @@ void CheckGameDataFile()
     char sPath[PLATFORM_MAX_PATH];
     BuildPath(Path_SM, sPath, sizeof(sPath), "gamedata/%s.txt", GAMEDATA);
     File hFile;
-    bool bNeedUpdate = false;
+    bool bNeedUpdate = false, bNull = true;
     if (FileExists(sPath))
     {
+        bNull = false;
         char buffer1[64], buffer2[64];
         hFile = OpenFile(sPath, "r", false);
         hFile.ReadLine(buffer1, sizeof(buffer1));
@@ -331,12 +332,15 @@ void CheckGameDataFile()
         hFile.WriteLine("	}");
         hFile.WriteLine("}");
 
-        char buffer[64];
-        do
+        if(!bNull)
         {
-            hFile.WriteLine("");
+            char buffer[64];
+            do
+            {
+                hFile.WriteLine("");
+            }
+            while (hFile.ReadLine(buffer, sizeof(buffer)));
         }
-        while (hFile.ReadLine(buffer, sizeof(buffer)));
         FlushFile(hFile);
     }
 
