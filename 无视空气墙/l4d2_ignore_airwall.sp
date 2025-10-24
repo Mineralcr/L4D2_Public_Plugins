@@ -5,7 +5,7 @@
 #include <dhooks>
 
 #define GAMEDATA         "l4d2_ignore_airwall"
-#define GAMEDATA_VERSION 35
+#define GAMEDATA_VERSION 36
 
 methodmap GameDataWrapper < GameData
 {
@@ -43,7 +43,7 @@ methodmap GameDataWrapper < GameData
 int
     g_iPlugins,
     g_iMaskMode[MAXPLAYERS + 1],
-    g_iCTerrorGameGGMovement[2];
+    g_iCTerrorGameMovement[2];
 
 ConVar
     g_hCvar_AirWall;
@@ -199,15 +199,15 @@ MRESReturn DTR_CTerrorPlayer_PlayerSolidMask_Post(int pThis, DHookReturn hReturn
 
 MRESReturn DTR_CBaseEntity_GetTeamNumber_Pre(int pThis, DHookReturn hReturn)
 {
-    if (g_iCTerrorGameGGMovement[0] == 1)
-        g_iCTerrorGameGGMovement[1] = pThis;
+    if (g_iCTerrorGameMovement[0] == 1)
+        g_iCTerrorGameMovement[1] = pThis;
     return MRES_Ignored;
 }
 
-MRESReturn DTR_CTerrorGameGGMovement_PlayerSolidMask_Post(int pThis, DHookReturn hReturn, DHookParam hParms)
+MRESReturn DTR_CTerrorGameMovement_PlayerSolidMask_Post(int pThis, DHookReturn hReturn, DHookParam hParms)
 {
-    g_iCTerrorGameGGMovement[0] = 0;
-    switch (g_iMaskMode[g_iCTerrorGameGGMovement[1]])
+    g_iCTerrorGameMovement[0] = 0;
+    switch (g_iMaskMode[g_iCTerrorGameMovement[1]])
     {
         case 0: return MRES_Ignored;
         case 1: hReturn.Value = MASK_NPCSOLID;
@@ -216,9 +216,9 @@ MRESReturn DTR_CTerrorGameGGMovement_PlayerSolidMask_Post(int pThis, DHookReturn
     return MRES_Override;
 }
 
-MRESReturn DTR_CTerrorGameGGMovement_PlayerSolidMask_Pre(int pThis, DHookReturn hReturn, DHookParam hParms)
+MRESReturn DTR_CTerrorGameMovement_PlayerSolidMask_Pre(int pThis, DHookReturn hReturn, DHookParam hParms)
 {
-    g_iCTerrorGameGGMovement[0] = 1;
+    g_iCTerrorGameMovement[0] = 1;
     return MRES_Ignored;
 }
 
@@ -228,7 +228,7 @@ void InItGameData()
 
     GameDataWrapper gd = new GameDataWrapper(GAMEDATA);
     delete gd.CreateDetourOrFail("CTerrorPlayer::PlayerSolidMask", true, _, DTR_CTerrorPlayer_PlayerSolidMask_Post);
-    delete gd.CreateDetourOrFail("CTerrorGameGGMovement::PlayerSolidMask", true, DTR_CTerrorGameGGMovement_PlayerSolidMask_Pre, DTR_CTerrorGameGGMovement_PlayerSolidMask_Post);
+    delete gd.CreateDetourOrFail("CTerrorGameMovement::PlayerSolidMask", true, DTR_CTerrorGameMovement_PlayerSolidMask_Pre, DTR_CTerrorGameMovement_PlayerSolidMask_Post);
     delete gd.CreateDetourOrFail("CBaseEntity::GetTeamNumber", true, DTR_CBaseEntity_GetTeamNumber_Pre);
 
     delete gd;
@@ -288,9 +288,9 @@ void CheckGameDataFile()
         hFile.WriteLine("			      }");
         hFile.WriteLine("			}");
         hFile.WriteLine("");
-        hFile.WriteLine("			\"CTerrorGameGGMovement::PlayerSolidMask\"");
+        hFile.WriteLine("			\"CTerrorGameMovement::PlayerSolidMask\"");
         hFile.WriteLine("			{");
-        hFile.WriteLine("				\"signature\"		\"CTerrorGameGGMovement::PlayerSolidMask\"");
+        hFile.WriteLine("				\"signature\"		\"CTerrorGameMovement::PlayerSolidMask\"");
         hFile.WriteLine("				\"callconv\"		\"thiscall\"");
         hFile.WriteLine("				\"return\"		    \"int\"");
         hFile.WriteLine("				\"this\"		    \"address\"");
@@ -322,7 +322,7 @@ void CheckGameDataFile()
         hFile.WriteLine("		               \"linux\"	    \"@_ZNK13CTerrorPlayer15PlayerSolidMaskEb\"");
         hFile.WriteLine("		               \"windows\"	    \"\\x55\\x8B\\xEC\\x53\\x56\\x8B\\xF1\\xE8\\x2A\\x2A\\x2A\\x2A\"");
         hFile.WriteLine("			     }");
-        hFile.WriteLine("		       \"CTerrorGameGGMovement::PlayerSolidMask\"");
+        hFile.WriteLine("		       \"CTerrorGameMovement::PlayerSolidMask\"");
         hFile.WriteLine("		         {");
         hFile.WriteLine("		               \"library\"	    \"server\"");
         hFile.WriteLine("		               \"linux\"	    \"@_ZNK19CTerrorGameMovement15PlayerSolidMaskEbP11CBasePlayer\"");
