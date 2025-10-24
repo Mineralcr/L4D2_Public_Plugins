@@ -105,7 +105,7 @@ int
     g_iAlpha,
     g_iShotgunMerge,
     g_iadd,
-    g_iVitcimHealth[L4D2_MAXPLAYERS + 1][L4D2_MAXPLAYERS + 1];
+    g_iVitcimHealth[L4D2_MAXPLAYERS + 1];
 float
     g_fsize,
     g_fgap,
@@ -170,7 +170,7 @@ public void OnPluginStart()
     g_cPlayerSettings = new Cookie("l4d_damage_show_set", "damage show settings", CookieAccess_Protected);
     AutoExecConfig(true, "l4d2_damage_show");
     HookEvent("player_left_safe_area", Event_LeftSafeArea, EventHookMode_PostNoCopy);
-    HookEvent("player_hurt", Event_PlayerHurt);
+    HookEvent("player_hurt", Event_PlayerHurt, EventHookMode_Post);
     InItVarNum();
 }
 
@@ -213,6 +213,7 @@ void InItVarNum()
         PlayerDataArray[i].last_set_time = 0.0;
         g_fTankIncap[i]                  = 0.0;
         g_bNeverFire[i]                  = true;
+        g_iVitcimHealth[i]               = 0;
 
         for (int j = 0; j <= L4D2_MAXPLAYERS; j++)
         {
@@ -224,7 +225,6 @@ void InItVarNum()
             g_SumShowMode[i][j].needShow            = false;
             g_SumShowMode[i][j].totalDamage         = 0;
             g_SumShowMode[i][j].lastShowTime        = 0.0;
-            g_iVitcimHealth[i][j]                   = 0;
         }
     }
     g_hcvar_maxtempentities.SetInt(512);
@@ -311,7 +311,7 @@ void Event_PlayerHurt(Event hEvent, const char[] name, bool dontBroadcast)
 
     int attacker = GetClientOfUserId(hEvent.GetInt("attacker"));
     int victim   = GetClientOfUserId(hEvent.GetInt("userid"));
-    if (IsValidClient(victim) && IsValidClient(attacker) && GetClientTeam(attacker) == 2 && !IsFakeClient(attacker))
+    if (IsValidClient(victim) && IsPlayerAlive(victim) && IsValidClient(attacker) && GetClientTeam(attacker) == 2 && !IsFakeClient(attacker))
     {
         if (!PlayerDataArray[attacker].plugin_switch)
             return;
@@ -323,16 +323,16 @@ void Event_PlayerHurt(Event hEvent, const char[] name, bool dontBroadcast)
             bool b_forceHeadshot = false;
             if (remain_health > 1)
             {
-                g_iVitcimHealth[attacker][victim] = remain_health;
+                g_iVitcimHealth[victim] = remain_health;
             }
             else
             {
-                if (g_iVitcimHealth[attacker][victim] == 0)
+                if (g_iVitcimHealth[victim] == 0)
                     damage = GetEntProp(victim, Prop_Data, "m_iMaxHealth");
                 else
-                    damage = g_iVitcimHealth[attacker][victim];
-                g_iVitcimHealth[attacker][victim] = 0;
-                b_forceHeadshot                   = true;
+                    damage = g_iVitcimHealth[victim];
+                g_iVitcimHealth[victim] = 0;
+                b_forceHeadshot         = true;
             }
             g_iAttackDamage[attacker][victim].damage        = damage;
             g_iAttackDamage[attacker][victim].forceHeadshot = b_forceHeadshot;
