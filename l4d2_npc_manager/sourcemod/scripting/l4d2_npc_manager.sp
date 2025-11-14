@@ -42,6 +42,8 @@ methodmap GameDataWrapper < GameData
 DynamicDetour g_hShouldUpdate;
 Address       g_pNextBotManager;
 Handle        g_hSDK_CallGetEntity;
+
+ConVar        g_hCvar_Origin_UpdateFrequency;
 ConVar        g_hCvar_Plugins;
 ConVar        g_hCvar_UpdateFrequency[10];
 
@@ -71,6 +73,9 @@ bool
     g_bPlugins,
     g_bLinuxOS;
 
+int
+    updatetick;
+
 float
     g_fUpdateFrequency[10];
 
@@ -85,17 +90,19 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-    g_hCvar_Plugins = CreateConVar("l4d2_uf_switch", "1", "插件是否接管update frequency,1接管,0不接管", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hCvar_Origin_UpdateFrequency = FindConVar("nb_update_frequency");
+    g_hCvar_Plugins                = CreateConVar("nb_uf_onoff", "1", "插件是否接管update frequency,1接管,0不接管", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     char g_Temp[2][128];
     for (int i = 0; i < 10; i++)
     {
-        Format(g_Temp[0], sizeof(g_Temp[]), "l4d2_uf_%s", g_sConVarString[i][1]);
+        Format(g_Temp[0], sizeof(g_Temp[]), "nb_uf_%s", g_sConVarString[i][1]);
         Format(g_Temp[1], sizeof(g_Temp[]), "%s的update frequency更新频率.", g_sConVarString[i][0]);
         g_hCvar_UpdateFrequency[i] = CreateConVar(g_Temp[0], "0.024", g_Temp[1], FCVAR_NOTIFY, true, 0.0, true, 1.0);
         g_hCvar_UpdateFrequency[i].AddChangeHook(OnCvarChnaged);
     }
 
     g_hCvar_Plugins.AddChangeHook(OnCvarChnaged);
+    g_hCvar_Origin_UpdateFrequency.AddChangeHook(OnCvarChnaged);
     AutoExecConfig(true, "l4d2_npc_manager");
     HookEvent("round_start_pre_entity", Event_RoundStart, EventHookMode_PostNoCopy);
     InItGameData();
@@ -128,6 +135,8 @@ void UpdateCvars()
         g_fUpdateFrequency[i] = g_hCvar_UpdateFrequency[i].FloatValue;
         g_fUpdateFrequency[i] = g_fUpdateFrequency[i] <= tickinterval ? tickinterval : g_fUpdateFrequency[i];
     }
+    updatetick = RoundToNearest(g_hCvar_Origin_UpdateFrequency.FloatValue / tickinterval);
+    updatetick = updatetick < 1 ? 1 : updatetick;
 }
 
 void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
@@ -213,12 +222,13 @@ MRESReturn DTR_NextBotManager_ShouldUpdate_Pre(Address pManager, DHookReturn hRe
     int ptr = hParams.GetObjectVar(1, 8, ObjectValueType_Int);
     if (m_botlist[ptr].entity != -1)
     {
-        int currentTick = GetGameTickCount();
-        int class       = m_botlist[ptr].class;
+        int current = GetGameTickCount();
+        int class   = m_botlist[ptr].class;
         if (class == -1) return MRES_Ignored;
 
-        float update = g_fUpdateFrequency[m_botlist[ptr].class];
-        if (currentTick < hParams.GetObjectVar(1, 16, ObjectValueType_Int) + RoundToNearest(update / GetTickInterval()))
+        int last   = hParams.GetObjectVar(1, 16, ObjectValueType_Int);
+        int update = RoundToNearest(g_fUpdateFrequency[m_botlist[ptr].class] / GetTickInterval());
+        if (current < last + update)
         {
             hReturn.Value = 0;
             return MRES_Supercede;
@@ -226,6 +236,8 @@ MRESReturn DTR_NextBotManager_ShouldUpdate_Pre(Address pManager, DHookReturn hRe
         else
         {
             hParams.SetObjectVar(1, 12, ObjectValueType_Bool, true);
+            if (update < updatetick)
+                hParams.SetObjectVar(1, 16, ObjectValueType_Int, last + update - updatetick);
             return MRES_ChangedHandled;
         }
     }
@@ -399,4 +411,3 @@ void CheckGameDataFile()
 
     delete hFile;
 }
-
