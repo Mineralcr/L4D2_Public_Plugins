@@ -1,7 +1,7 @@
 public Plugin myinfo =
 {
     name        = "l4d2_npc_manager",
-    author      = "洛琪,小燐RM",    //特别感谢小燐RM为我提供了win 签名支持 Thanks For 小燐RM Support for Windows Signature
+    author      = "洛琪,小燐RM",          ------特别感谢小燐RM为我提供了win 签名支持 Thanks For 小燐RM Support for Windows Signature-----
     description = "插件控制每种特感、僵尸的刷新率，不同特感可以不同刷新率，适用tank、witch、小僵尸和特感",
     version     = "1.0",
     url         = "https://steamcommunity.com/profiles/76561198812009299/"
