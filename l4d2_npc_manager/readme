@@ -1,3 +1,5 @@
+//  Set a separate update frequency for each NPC
+
 public Plugin myinfo =
 {
     name        = "l4d2_npc_manager",
