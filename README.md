@@ -10,3 +10,5 @@
 [l4d2_vscript_purifier] Prevent script pollution caused by third-party map scripts on dedicated servers. 防止三方图脚本在专用服务器上造成脚本污染.
 
 [l4d_acid_damage_fix] Fix excessive damage range of spitter's acid. 修复口水酸液过大的伤害范围.
+
+[无视空气墙] Player can Ignore Air Wall (Player Clip And Clip].  玩家可以无视空气墙.
