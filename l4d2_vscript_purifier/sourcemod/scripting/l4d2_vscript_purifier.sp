@@ -96,6 +96,16 @@ public Plugin myinfo =
     url         = "https://steamcommunity.com/profiles/76561198812009299/"
 };
 
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	if(GetEngineVersion() != Engine_Left4Dead2 || !IsDedicatedServer())
+	{
+		strcopy(error, err_max, "Plugin only supports Left 4 Dead 2 And only supports Dedicated Server");
+		return APLRes_SilentFailure;
+	}
+	return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
     mp_gamemode     = FindConVar("mp_gamemode");
