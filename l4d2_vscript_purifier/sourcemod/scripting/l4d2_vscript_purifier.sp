@@ -5,7 +5,7 @@
 #include <dhooks>
 
 #define GAMEDATA         "l4d2_vscript_purifier"
-#define GAMEDATA_VERSION 47
+#define GAMEDATA_VERSION 49
 
 methodmap GameDataWrapper < GameData
 {
@@ -110,7 +110,7 @@ public void OnPluginStart()
 {
     mp_gamemode     = FindConVar("mp_gamemode");
     g_hCvar_Switch  = CreateConVar("l4d2_vscript_purifier",
-                                   "2",
+                                   "3",
                                    "是否阻止非法脚本造成脚本污染,0不阻止, 1阻止, 2阻止并控制台打印信息, 3阻止并且将阻止情况记录到日志里,\
                                    \n[注意,地图脚本必须和地图mission文件放在同一个vpk内，才会被识别为地图脚本，否则会识别为脚本类MOD]",
                                    FCVAR_NOTIFY,
@@ -175,7 +175,6 @@ public void OnMapInit(const char[] mapName)
         ReadMemoryString(pMemory + view_as<Address>(i * 4 * sizeof(meta) + 4 * AddonMetadata::name), meta.name, sizeof(meta.name));
         meta.type    = LoadFromAddress(pMemory + view_as<Address>(i * 4 * sizeof(meta) + 4 * AddonMetadata::type), NumberType_Int32);
         meta.unknown = LoadFromAddress(pMemory + view_as<Address>(i * 4 * sizeof(meta) + 4 * AddonMetadata::unknown), NumberType_Int32);
-
         char buffers[256];
         strcopy(buffers, sizeof(buffers), meta.file);
 
@@ -514,7 +513,7 @@ void CheckGameDataFile()
             hFile.WriteLine("			    \"windows\"");
             hFile.WriteLine("			    {");
             hFile.WriteLine("				    \"signature\"		\"show_addon_metadata\"");
-            hFile.WriteLine("				    \"read\"	    \"12\"");
+            hFile.WriteLine("				    \"read\"	    \"49\"");
             hFile.WriteLine("			    }");
             hFile.WriteLine("			}");
             hFile.WriteLine("			\"msg_VScriptServerRunScriptForAllAddons\"");
