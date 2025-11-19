@@ -6,3 +6,5 @@
 [l4d2_npc_manager] Implement different nb_update_frequency for different infected individuals. 实现对不同的感染者设置不同的update frequency
 
 [l4d2_sticky_pipe_bomb] Sticky hand grenade.粘性手雷.
+
+[l4d2_vscript_purifier] Prevent script pollution caused by third-party map scripts on dedicated servers. 防止三方图脚本在专用服务器上造成脚本污染.
