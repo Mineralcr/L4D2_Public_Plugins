@@ -5,7 +5,7 @@
 #include <dhooks>
 
 #define GAMEDATA         "l4d2_vscript_purifier"
-#define GAMEDATA_VERSION 46
+#define GAMEDATA_VERSION 47
 
 methodmap GameDataWrapper < GameData
 {
@@ -514,7 +514,7 @@ void CheckGameDataFile()
             hFile.WriteLine("			    \"windows\"");
             hFile.WriteLine("			    {");
             hFile.WriteLine("				    \"signature\"		\"show_addon_metadata\"");
-            hFile.WriteLine("				    \"read\"	    \"48\"");
+            hFile.WriteLine("				    \"read\"	    \"12\"");
             hFile.WriteLine("			    }");
             hFile.WriteLine("			}");
             hFile.WriteLine("			\"msg_VScriptServerRunScriptForAllAddons\"");
