@@ -5,7 +5,7 @@
 #include <dhooks>
 
 #define GAMEDATA         "l4d2_vscript_purifier"
-#define GAMEDATA_VERSION 42
+#define GAMEDATA_VERSION 46
 
 methodmap GameDataWrapper < GameData
 {
@@ -514,7 +514,7 @@ void CheckGameDataFile()
             hFile.WriteLine("			    \"windows\"");
             hFile.WriteLine("			    {");
             hFile.WriteLine("				    \"signature\"		\"show_addon_metadata\"");
-            hFile.WriteLine("				    \"read\"	    \"31\"");
+            hFile.WriteLine("				    \"read\"	    \"48\"");
             hFile.WriteLine("			    }");
             hFile.WriteLine("			}");
             hFile.WriteLine("			\"msg_VScriptServerRunScriptForAllAddons\"");
@@ -642,18 +642,40 @@ void CheckGameDataFile()
             hFile.WriteLine("				\"this\" \"address\"");
             hFile.WriteLine("				\"arguments\"");
             hFile.WriteLine("				{");
-            hFile.WriteLine("					\"src\"");
-            hFile.WriteLine("					{");
-            hFile.WriteLine("						\"type\" \"charptr\"");
-            hFile.WriteLine("					}");
-            hFile.WriteLine("					\"a1\"");
-            hFile.WriteLine("					{");
-            hFile.WriteLine("						\"type\" \"int\"");
-            hFile.WriteLine("					}");
-            hFile.WriteLine("					\"a2\"");
-            hFile.WriteLine("					{");
-            hFile.WriteLine("						\"type\" \"int\"");
-            hFile.WriteLine("					}");
+            hFile.WriteLine("			        \"linux\"");
+            hFile.WriteLine("			        {");
+            hFile.WriteLine("					    \"src\"");
+            hFile.WriteLine("					    {");
+            hFile.WriteLine("						    \"type\" \"charptr\"");
+            hFile.WriteLine("					    }");
+            hFile.WriteLine("					    \"a1\"");
+            hFile.WriteLine("					    {");
+            hFile.WriteLine("						    \"type\" \"int\"");
+            hFile.WriteLine("					    }");
+            hFile.WriteLine("					    \"a2\"");
+            hFile.WriteLine("					    {");
+            hFile.WriteLine("						    \"type\" \"int\"");
+            hFile.WriteLine("					    }");
+            hFile.WriteLine("			        }");
+            hFile.WriteLine("			        \"windows\"");
+            hFile.WriteLine("			        {");
+            hFile.WriteLine("					    \"src\"");
+            hFile.WriteLine("					    {");
+            hFile.WriteLine("						    \"type\" \"charptr\"");
+            hFile.WriteLine("					    }");
+            hFile.WriteLine("					    \"a3\"");
+            hFile.WriteLine("					    {");
+            hFile.WriteLine("						    \"type\" \"charptr\"");
+            hFile.WriteLine("					    }");
+            hFile.WriteLine("					    \"a1\"");
+            hFile.WriteLine("					    {");
+            hFile.WriteLine("						    \"type\" \"int\"");
+            hFile.WriteLine("					    }");
+            hFile.WriteLine("					    \"a2\"");
+            hFile.WriteLine("					    {");
+            hFile.WriteLine("						    \"type\" \"int\"");
+            hFile.WriteLine("					    }");
+            hFile.WriteLine("			        }");
             hFile.WriteLine("				}");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
