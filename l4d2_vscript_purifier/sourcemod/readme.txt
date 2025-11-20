@@ -1,29 +1,28 @@
 # Left 4 Dead 2 专用服务器 VScript 脚本污染防护机制
+## Left 4 Dead 2 Dedicated Server VScript Contamination Prevention Mechanism 
  
-## 功能目标 
-*   **核心问题：** 防止专用服务器上运行非本地图设计的第三方脚本（脚本污染）。
-*   **典型场景：** 在地图 A 上错误地加载并运行了为地图 B 设计的脚本。
-*   **根源分析：** 问题通常源于不同地图作者在 VScript 脚本编写技能水平上的差异。
+### 功能目标 | Function Goal 
+▌ **核心问题**  
+防止专用服务器上运行非本地图设计的第三方脚本（脚本污染）  
+▌ **典型场景**  
+在地图 A 上错误地加载并运行了为地图 B 设计的脚本  
+▌ **根源分析**  
+问题通常源于不同地图作者在 VScript 脚本编写技能水平上的差异  
  
-## 常见污染脚本示例 
-以下类型的全局加载脚本是常见的污染源：
-*   `director_base_addon.nut`  (或类似名称)
-*   `scriptedmode_addon.nut`  (或类似名称)
-*   `mapspawn_addon.nut`  (或类似名称)
-*   `coop.nut`  (或相关合作模式脚本)
-*   `realism.nut`  (或写实模式相关脚本)
-*   其他可能全局加载并影响游戏模式的脚本。
+▌ **Core Issue**  
+Prevent third-party map scripts not designed for current map from running (script contamination)  
+▌ **Typical Scenario**  
+Scripts for Map B are erroneously loaded and executed on Map A  
+▌ **Root Cause Analysis**  
+Primarily due to uneven scripting proficiency among map authors  
  
-## 关键注意事项 
-1.  **脚本来源判定规则：**
-    *   **地图脚本：** **仅当**脚本文件与当前地图的 `mission` 文件（通常指 `.txt` 配置文件）**位于同一个 VPK 文件 (.vpk) 内**时，该脚本才会被视作**地图专属脚本**，并受到本机制的保护性限制。
-    *   **普通脚本MOD：** 不符合上述条件的脚本文件（例如位于单独的 VPK 或直接放在 `scripts/vscripts` 目录下），将被视为**普通脚本类型 MOD**。本机制**不会阻止**这类脚本的加载。
+---
  
-## 白名单机制
-*   **首次运行生成：** 本插件（防护机制）在第一次成功运行后，会自动生成两个白名单配置文件。
-*   **白名单文件位置与作用：**
-    *   **模式脚本白名单：** `configs/l4d2_vscript_mode_whitelist.cfg` 
-        *   *作用：* 该名单上的**模式脚本**（即使符合“地图脚本”判定规则）将被**放行**加载。
-    *   **VPK 文件白名单：** `configs/l4d2_vscript_vpk_whitelist.cfg` 
-        *   *作用：* 该名单上的**VPK 文件内**的所有脚本（即使符合“地图脚本”判定规则）都将被**放行**加载。
-
+### 常见污染脚本示例 | Common Contamination Script Examples
+```diff 
+- director_base_addon.nut  (或类似名称)
+- scriptedmode_addon.nut  (或类似名称)
+- mapspawn_addon.nut  (或类似名称)
+- coop.nut  (或相关合作模式脚本)
+- realism.nut  (或写实模式相关脚本)
+- 其他全局加载的游戏模式脚本 
