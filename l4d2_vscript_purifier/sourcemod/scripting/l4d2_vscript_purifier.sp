@@ -10,14 +10,14 @@
 methodmap GameDataWrapper < GameData
 {
 
-    public  GameDataWrapper(const char[] file)
+public     GameDataWrapper(const char[] file)
     {
         GameData gd = new GameData(file);
         if (!gd) SetFailState("[GameData] Missing gamedata of file \"%s\".", file);
         return view_as<GameDataWrapper>(gd);
     }
 
-    public  DynamicDetour CreateDetourOrFail(const char[] name,
+public     DynamicDetour CreateDetourOrFail(const char[] name,
                                      bool          bNow     = true,
                                      DHookCallback preHook  = INVALID_FUNCTION,
                                      DHookCallback postHook = INVALID_FUNCTION)
@@ -62,64 +62,74 @@ enum struct SelfMapInfo
     char GameMode[64];
 }
 
-SelfMapInfo   g_MapInfo;
+SelfMapInfo
+    g_MapInfo;
 
-DynamicDetour V_snprintf;
+DynamicDetour
+    V_snprintf;
 
-ArrayList     g_aContentList;
-ArrayList     g_aCvarVscriptChanged;
-ArrayList     g_aGlobalVpkNoAllow;
-Address       g_pVecAddonMetadata;
+ArrayList
+    g_aContentList,
+    g_aCvarVscriptChanged,
+    g_aGlobalVpkNoAllow,
+    g_aModeWhitelist,
+    g_aVpkWhitelist;
 
-Handle        g_hSDK_VScriptRunForAllAddons;
-Handle        fileHandle = null;
+Address
+    g_pVecAddonMetadata;
 
-ConVar        mp_gamemode;
-ConVar        g_hCvar_Switch;
-ConVar        g_hCvar_Restore;
+Handle
+    g_hSDK_VScriptRunForAllAddons,
+    fileHandle = null;
 
-bool          g_bProcessModeVscript;
-bool          g_bLinuxOS;
-bool          g_bMissionReload;
-bool          g_bFoundVpk;
+ConVar
+    mp_gamemode,
+    g_hCvar_Switch,
+    g_hCvar_Restore,
+    g_hCvar_ModeWhiteList,
+    g_hCvar_VpkWhiteList;
 
-int           g_iAllowModeScript;
-int           g_icvSwitch;
-int           g_icvRestore;
+bool
+    g_bProcessModeVscript,
+    g_bLinuxOS,
+    g_bMissionReload,
+    g_bFoundVpk;
+
+int
+    g_iAllowModeScript,
+    g_icvSwitch,
+    g_icvRestore;
+
+char
+    g_sModeWhitelistPath[PLATFORM_MAX_PATH],
+    g_sVpkWhitelistPath[PLATFORM_MAX_PATH];
 
 public Plugin myinfo =
 {
     name        = "l4d2_ignore_airwall",
     author      = "洛琪, Forgetest",
     description = "防止地图脚本污染",
-    version     = "1.0",
+    version     = "1.2",
     url         = "https://steamcommunity.com/profiles/76561198812009299/"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
-	if(GetEngineVersion() != Engine_Left4Dead2 || !IsDedicatedServer())
-	{
-		strcopy(error, err_max, "Plugin only supports Left 4 Dead 2 And only supports Dedicated Server");
-		return APLRes_SilentFailure;
-	}
-	return APLRes_Success;
+    if (GetEngineVersion() != Engine_Left4Dead2 || !IsDedicatedServer())
+    {
+        strcopy(error, err_max, "Plugin only supports Left 4 Dead 2 And only supports Dedicated Server");
+        return APLRes_SilentFailure;
+    }
+    return APLRes_Success;
 }
 
 public void OnPluginStart()
 {
-    mp_gamemode     = FindConVar("mp_gamemode");
-    g_hCvar_Switch  = CreateConVar("l4d2_vscript_purifier",
-                                   "2",
-                                   "是否阻止非法脚本造成脚本污染,0不阻止, 1阻止, 2阻止并控制台打印信息, 3阻止并且将阻止情况记录到日志里,\
-                                   \n[注意,地图脚本必须和地图mission文件放在同一个vpk内，才会被识别为地图脚本，否则会识别为脚本类MOD]",
-                                   FCVAR_NOTIFY,
-                                   true, 0.0, true, 3.0);
-    g_hCvar_Restore = CreateConVar("l4d2_vscript_cvarRestore",
-                                   "1",
-                                   "是否在过关时自动还原被脚本修改的cvar值,1是，0否.",
-                                   FCVAR_NOTIFY,
-                                   true, 0.0, true, 1.0);
+    mp_gamemode           = FindConVar("mp_gamemode");
+    g_hCvar_Switch        = CreateConVar("l4d2_vscript_purifier", "2", "是否阻止非法脚本造成脚本污染,0不阻止, 1阻止, 2阻止并控制台打印信息, 3阻止并且将阻止情况记录到日志里,\\n[注意,地图脚本必须和地图mission文件放在同一个vpk内，才会被识别为地图脚本，否则会识别为脚本类MOD]", FCVAR_NOTIFY, true, 0.0, true, 3.0);
+    g_hCvar_Restore       = CreateConVar("l4d2_vscript_cvarRestore", "1", "是否在过关时自动还原被脚本修改的cvar值,1是，0否.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hCvar_ModeWhiteList = CreateConVar("l4d2_vscript_modewhiteList", "1", "是否读取模式白名单内容?白名单位于configs文件夹下.[例如,mutation4在白名单内，则所有此模式脚本都会放行.]", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hCvar_VpkWhiteList  = CreateConVar("l4d2_vscript_modewhiteList", "1", "是否读取Vpk白名单内容?白名单位于configs文件夹下.[此Vpk名称下的全部脚本放行.]", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     mp_gamemode.AddChangeHook(OnCvarChanged);
     g_hCvar_Switch.AddChangeHook(OnCvarChanged);
     g_hCvar_Restore.AddChangeHook(OnCvarChanged);
@@ -130,13 +140,87 @@ public void OnPluginStart()
     Format(logFile, sizeof(logFile), "/logs/vscript_purifier.log");
     BuildPath(Path_SM, g_MapInfo.LogFilePath, PLATFORM_MAX_PATH, logFile);
 
+    InItWhiteListFunc();
     UpdateCvars();
+    ExecConfigsEarly();
 
     HookEvent("round_start_pre_entity", Event_PreRoundStart, EventHookMode_PostNoCopy);
 }
 
-public void OnConfigsExecuted()
+void InItWhiteListFunc()
 {
+    BuildPath(Path_SM, g_sModeWhitelistPath, sizeof(g_sModeWhitelistPath), "configs/l4d2_vscript_mode_whitelist.cfg");
+    BuildPath(Path_SM, g_sVpkWhitelistPath, sizeof(g_sVpkWhitelistPath), "configs/l4d2_vscript_vpk_whitelist.cfg");
+    delete g_aModeWhitelist;
+    delete g_aVpkWhitelist;
+    g_aModeWhitelist = new ArrayList(ByteCountToCells(64));
+    g_aVpkWhitelist  = new ArrayList(ByteCountToCells(64));
+    CheckAndCreateWhitelistFile(g_sModeWhitelistPath, "ModeWhitelist");
+    CheckAndCreateWhitelistFile(g_sVpkWhitelistPath, "VpkWhitelist");
+    if (g_hCvar_ModeWhiteList.BoolValue)
+        ReadWhitelistFile(g_sModeWhitelistPath, g_aModeWhitelist);
+    if (g_hCvar_VpkWhiteList.BoolValue)
+        ReadWhitelistFile(g_sVpkWhitelistPath, g_aVpkWhitelist);
+}
+
+void CheckAndCreateWhitelistFile(const char[] path, const char[] section)
+{
+    if (FileExists(path))
+        return;
+
+    File file = OpenFile(path, "w", false);
+    if (file == null)
+        return;
+
+    if (StrEqual(section, "ModeWhitelist"))
+        file.WriteLine("// 将需要放行的模式名称写入空白键值处，如coop");
+    else
+        file.WriteLine("// 将需要放行的vpk名称写入空白键值处，如example.vpk");
+
+    file.WriteLine("\"%s\"", section);
+    file.WriteLine("{");
+    for (int i = 1; i <= 64; i++)
+    {
+        file.WriteLine("\t\"entry%d\" \"\"", i);
+    }
+    file.WriteLine("}");
+    file.Close();
+}
+
+void ReadWhitelistFile(const char[] path, ArrayList list)
+{
+    list.Clear();
+
+    KeyValues kv = new KeyValues("");
+    if (!kv.ImportFromFile(path))
+    {
+        delete kv;
+        return;
+    }
+
+    kv.GotoFirstSubKey(false);
+
+    char value[64];
+    do
+    {
+        kv.GetString(NULL_STRING, value, sizeof(value));
+        if (strlen(value) > 0)
+        {
+            if (list.FindString(value) == -1)
+                list.PushString(value);
+        }
+    }
+    while (kv.GotoNextKey(false));
+    char buffer[64];
+    g_aModeWhitelist.GetString(0, buffer, sizeof(buffer));
+
+    delete kv;
+}
+
+void ExecConfigsEarly()
+{
+    ServerCommand("exec sourcemod/l4d2_vscript_purifier.cfg");
+    ServerExecute();
     UpdateCvars();
 }
 
@@ -228,8 +312,7 @@ void Call_VeryEarly()
     ConvarRestoreDftault();
     delete g_aCvarVscriptChanged;
     g_aCvarVscriptChanged = new ArrayList(ByteCountToCells(64));
-
-    g_iAllowModeScript = 0;
+    g_iAllowModeScript    = 0;
     V_snprintf.Enable(Hook_Pre, DTR_PreV_snprintf);
     g_bProcessModeVscript = true;
     SDKCall(g_hSDK_VScriptRunForAllAddons, g_MapInfo.GameMode, 0, 1);
@@ -333,6 +416,7 @@ MRESReturn DTR_PreVScriptServerRunScript(DHookReturn hReturn, DHookParam hParams
                 break;
             }
         }
+
         hReturn.Value = 1;
         return MRES_Supercede;
     }
@@ -344,6 +428,8 @@ MRESReturn DTR_PreVScriptServerRunScript(DHookReturn hReturn, DHookParam hParams
         if (StrContains(filename, buffer, false) != -1)
         {
             bAllow = false;
+            if (g_aVpkWhitelist.FindString(buffer) != -1)
+                bAllow = true;
             break;
         }
     }
@@ -352,6 +438,11 @@ MRESReturn DTR_PreVScriptServerRunScript(DHookReturn hReturn, DHookParam hParams
     {
         if (g_iAllowModeScript == 0)
             bAllow = false;
+        if (g_aModeWhitelist.FindString(g_MapInfo.GameMode) != -1)
+        {
+            bAllow             = true;
+            g_iAllowModeScript = 4;
+        }
     }
 
     if (g_icvSwitch >= 2)
@@ -367,10 +458,11 @@ MRESReturn DTR_PreVScriptServerRunScript(DHookReturn hReturn, DHookParam hParams
             FormatEx(name, sizeof(name), "scripts/vscripts/%s.nut", filename);
             switch (g_iAllowModeScript)
             {
-                case 0: {FormatEx(reason, sizeof(reason), "reason: current Vpk file dones't have this scripts file");}
-                case 1: {FormatEx(reason, sizeof(reason), "reason: file exist in left4dead2/scripts/vscripts/");}
-                case 2: {FormatEx(reason, sizeof(reason), "reason: file exist in this Map Vpk File");}
-                case 3: {FormatEx(reason, sizeof(reason), "reason: file exist in other Content Vpk File");}
+                case 0: FormatEx(reason, sizeof(reason), "reason: current Vpk file dones't have this scripts file");
+                case 1: FormatEx(reason, sizeof(reason), "reason: file exist in left4dead2/scripts/vscripts/");
+                case 2: FormatEx(reason, sizeof(reason), "reason: file exist in this Map Vpk File");
+                case 3: FormatEx(reason, sizeof(reason), "reason: file exist in other Content Vpk File");
+                case 4: FormatEx(reason, sizeof(reason), "reason: white list allowed.");
             }
             PrintToServer("%s %s %s", prefix, name, reason);
         }
@@ -404,7 +496,7 @@ MRESReturn DTR_PreCScriptConvarAccessor_SetValue(DHookReturn hReturn, DHookParam
 {
     char CvarName[64];
     DHookGetParamString(hParams, 1, CvarName, sizeof(CvarName));
-    if(g_aCvarVscriptChanged == null)
+    if (g_aCvarVscriptChanged == null)
     {
         delete g_aCvarVscriptChanged;
         g_aCvarVscriptChanged = new ArrayList(ByteCountToCells(64));
