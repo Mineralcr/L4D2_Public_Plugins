@@ -1,5 +1,5 @@
-# Left 4 Dead 2 专用服务器 VScript 防污染机制 
-# Left 4 Dead 2 Dedicated Server VScript Anti-Contamination Mechanism
+# Left 4 Dead 2 专用服务器 VScript 防污染机制 #
+# Left 4 Dead 2 Dedicated Server VScript Anti-Contamination Mechanism#
  
 ## 功能 / Function 
 *   **核心目标：** 防止在专用服务器上加载地图时，出现 **第三方地图脚本污染** 问题。
