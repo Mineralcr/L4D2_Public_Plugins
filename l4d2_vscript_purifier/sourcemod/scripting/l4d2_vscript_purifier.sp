@@ -211,9 +211,6 @@ void ReadWhitelistFile(const char[] path, ArrayList list)
         }
     }
     while (kv.GotoNextKey(false));
-    char buffer[64];
-    g_aModeWhitelist.GetString(0, buffer, sizeof(buffer));
-
     delete kv;
 }
 
