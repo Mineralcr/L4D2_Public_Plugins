@@ -110,7 +110,7 @@ public void OnPluginStart()
 {
     mp_gamemode     = FindConVar("mp_gamemode");
     g_hCvar_Switch  = CreateConVar("l4d2_vscript_purifier",
-                                   "3",
+                                   "2",
                                    "是否阻止非法脚本造成脚本污染,0不阻止, 1阻止, 2阻止并控制台打印信息, 3阻止并且将阻止情况记录到日志里,\
                                    \n[注意,地图脚本必须和地图mission文件放在同一个vpk内，才会被识别为地图脚本，否则会识别为脚本类MOD]",
                                    FCVAR_NOTIFY,
