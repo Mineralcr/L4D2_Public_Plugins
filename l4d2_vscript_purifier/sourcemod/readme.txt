@@ -12,6 +12,6 @@ White list:
 注意事项：
   只有和mission文件在同一个vpk文件下的脚本文件才会被认为是地图脚本文件进行限制，否则会被认为是普通脚本类型mod，不阻止其加载。
 
-白名单：
+白名单：如果你不满意插件的自动识别，想手动干预插件拦截规则，可以添加白名单。
     插件第一次运行后，会在"configs/l4d2_vscript_mode_whitelist.cfg"下生成模式白名单，白名单上的模式脚本放行；
     会在"configs/l4d2_vscript_vpk_whitelist.cfg"下生成vpk白名单，白名单上的vpk文件内的脚本放行.
