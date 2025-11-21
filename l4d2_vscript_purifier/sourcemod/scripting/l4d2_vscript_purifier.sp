@@ -106,7 +106,7 @@ char
 
 public Plugin myinfo =
 {
-    name        = "l4d2_ignore_airwall",
+    name        = "l4d2_vscript_purifier",
     author      = "洛琪, Forgetest",
     description = "防止地图脚本污染",
     version     = "1.2",
@@ -184,7 +184,7 @@ void CheckAndCreateWhitelistFile(const char[] path, const char[] section)
         file.WriteLine("\t\"entry%d\" \"\"", i);
     }
     file.WriteLine("}");
-    file.Close();
+    delete file;
 }
 
 void ReadWhitelistFile(const char[] path, ArrayList list)
