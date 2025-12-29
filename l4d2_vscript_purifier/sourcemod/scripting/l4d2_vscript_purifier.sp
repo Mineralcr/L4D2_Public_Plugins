@@ -144,8 +144,17 @@ public void OnPluginStart()
     UpdateCvars();
     ExecConfigsEarly();
 
+    RegConsoleCmd("sm_cj_scripts", Cmd_Melee);
+
     HookEvent("round_start_pre_entity", Event_PreRoundStart, EventHookMode_PostNoCopy);
 }
+
+Action Cmd_Melee(int client, int args)
+{
+    Call_VeryEarly();
+    return Plugin_Continue;
+}
+
 
 void InItWhiteListFunc()
 {
@@ -309,7 +318,7 @@ void Call_VeryEarly()
     ConvarRestoreDftault();
     delete g_aCvarVscriptChanged;
     g_aCvarVscriptChanged = new ArrayList(ByteCountToCells(64));
-    g_iAllowModeScript    = 0;
+    g_iAllowModeScript    = 5;
     V_snprintf.Enable(Hook_Pre, DTR_PreV_snprintf);
     g_bProcessModeVscript = true;
     SDKCall(g_hSDK_VScriptRunForAllAddons, g_MapInfo.GameMode, 0, 1);
@@ -391,6 +400,7 @@ MRESReturn DTR_KeyValues_GetString_Post(Address pKeyValue, DHookReturn hReturn, 
 
 MRESReturn DTR_PreVScriptServerRunScript(DHookReturn hReturn, DHookParam hParams)
 {
+
     if (g_icvSwitch < 1) return MRES_Ignored;
 
     char filename[256], buffer[96];
@@ -398,6 +408,7 @@ MRESReturn DTR_PreVScriptServerRunScript(DHookReturn hReturn, DHookParam hParams
 
     if (g_bProcessModeVscript)
     {
+        g_iAllowModeScript = 0;
         if (StrContains(filename, ".vpk", false) == -1)
             g_iAllowModeScript = 1;
 
@@ -460,6 +471,7 @@ MRESReturn DTR_PreVScriptServerRunScript(DHookReturn hReturn, DHookParam hParams
                 case 2: FormatEx(reason, sizeof(reason), "reason: file exist in this Map Vpk File");
                 case 3: FormatEx(reason, sizeof(reason), "reason: file exist in other Content Vpk File");
                 case 4: FormatEx(reason, sizeof(reason), "reason: white list allowed.");
+                case 5: FormatEx(reason, sizeof(reason), "reason: Mode Vscripts Allowed.");
             }
             PrintToServer("%s %s %s", prefix, name, reason);
         }
