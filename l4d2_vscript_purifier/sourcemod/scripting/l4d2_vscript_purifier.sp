@@ -144,17 +144,8 @@ public void OnPluginStart()
     UpdateCvars();
     ExecConfigsEarly();
 
-    RegConsoleCmd("sm_cj_scripts", Cmd_Melee);
-
     HookEvent("round_start_pre_entity", Event_PreRoundStart, EventHookMode_PostNoCopy);
 }
-
-Action Cmd_Melee(int client, int args)
-{
-    Call_VeryEarly();
-    return Plugin_Continue;
-}
-
 
 void InItWhiteListFunc()
 {
@@ -172,6 +163,7 @@ void InItWhiteListFunc()
         ReadWhitelistFile(g_sVpkWhitelistPath, g_aVpkWhitelist);
 }
 
+// 白名单函数
 void CheckAndCreateWhitelistFile(const char[] path, const char[] section)
 {
     if (FileExists(path))
@@ -223,6 +215,7 @@ void ReadWhitelistFile(const char[] path, ArrayList list)
     delete kv;
 }
 
+// 脚本加载早于cfg自动加载，所以需要手动提前加载cfg
 void ExecConfigsEarly()
 {
     ServerCommand("exec sourcemod/l4d2_vscript_purifier.cfg");
@@ -242,6 +235,7 @@ void UpdateCvars()
     mp_gamemode.GetString(g_MapInfo.GameMode, sizeof(g_MapInfo.GameMode));
 }
 
+// 主要逻辑
 public void OnMapInit(const char[] mapName)
 {
     delete g_aContentList;
@@ -250,16 +244,23 @@ public void OnMapInit(const char[] mapName)
     g_aGlobalVpkNoAllow = new ArrayList(ByteCountToCells(256));
     FormatEx(g_MapInfo.CurrentMapName, sizeof(g_MapInfo.CurrentMapName), mapName);
 
+    /* 用于从地图名称→mission文件名称，通过执行控制台命令"mission_reload", 会触发函数：
+        DTR_PreParseMissionFromFile
+        DTR_ParseMissionFromFile_Post
+        DTR_KeyValues_GetString_Post
+    通过上述函数获取当前正在加载的mission文件名称。
+    注意，mission文件名称指的是这个txt文件的名称，不是任务名,比如增城mission名称是zc,但是mission文件名称是zengchengone.txt，不是换图插件里的那个所谓的mission名称
+    */
     g_bFoundVpk = false;
     ServerCommand("mission_reload");
     ServerExecute();
 
-    char buffer[256];
-    g_aGlobalVpkNoAllow.GetString(0, buffer, sizeof(buffer));
+    char buffer[256]; 
+    g_aGlobalVpkNoAllow.GetString(0, buffer, sizeof(buffer)); // 当前加载的地图所在的vpk名称
     AddonMetadata meta;
     Address       pMemory = LoadFromAddress(g_pVecAddonMetadata, NumberType_Int32);
     int           size    = LoadFromAddress(g_pVecAddonMetadata + view_as<Address>(12), NumberType_Int32);
-    for (int i = 0; i < size; ++i)
+    for (int i = 0; i < size; ++i)  // 读取服务器addons里全部的vpk文件
     {
         ReadMemoryString(pMemory + view_as<Address>(i * 4 * sizeof(meta) + 4 * AddonMetadata::file), meta.file, sizeof(meta.file));
         ReadMemoryString(pMemory + view_as<Address>(i * 4 * sizeof(meta) + 4 * AddonMetadata::name), meta.name, sizeof(meta.name));
@@ -268,7 +269,12 @@ public void OnMapInit(const char[] mapName)
         char buffers[256];
         strcopy(buffers, sizeof(buffers), meta.file);
 
-        char parts[16][256];
+        /*
+            meta.file是vpk路径，例如：/home/ubuntu/l4d2/left4dead2/addons/gzzc73_server.vpk
+            meta.name是任务文件名称,例如zengchengone.txt
+        
+        */
+        char parts[16][256]; // vpk文件的路径
         int  count = ExplodeString(buffers, "/", parts, sizeof(parts), sizeof(parts[]));
         for (int j = count - 1; j >= 0; j--)
         {
@@ -284,15 +290,15 @@ public void OnMapInit(const char[] mapName)
 
             if (StrEqual(suffix, ".vpk", false))
             {
-                if (meta.type == Metadata_Mission)
+                if (meta.type == Metadata_Mission) // 如果是地图文件，如果mission文件名是当前加载的mission文件名，则放行，否则黑名单
                 {
                     if ((StrContains(buffer, meta.name) == -1))
                         g_aGlobalVpkNoAllow.PushString(parts[j]);
                     else
-                        strcopy(g_MapInfo.VpkName, sizeof(g_MapInfo.VpkName), parts[j]);
+                        strcopy(g_MapInfo.VpkName, sizeof(g_MapInfo.VpkName), parts[j]); // parts[j]是vpk名称
                 }
                 else
-                    g_aContentList.PushString(parts[j]);
+                    g_aContentList.PushString(parts[j]); // 普通vpk文件列表，不做拦截
                 break;
             }
             break;
@@ -308,6 +314,7 @@ public void OnMapStart()
     HookEvent("round_start_pre_entity", Event_PreRoundStart, EventHookMode_PostNoCopy);
 }
 
+// 第一次进入开服时，round_start_pre_entity无法保证比全部脚本加载早，但回合重启时能保证，所以第一次加载地图用mapinit，后续用round_start_pre_entity
 void Event_PreRoundStart(Event event, const char[] name, bool dontBroadcast)
 {
     Call_VeryEarly();
@@ -315,13 +322,13 @@ void Event_PreRoundStart(Event event, const char[] name, bool dontBroadcast)
 
 void Call_VeryEarly()
 {
-    ConvarRestoreDftault();
+    ConvarRestoreDftault(); // 还原脚本修改的cvar
     delete g_aCvarVscriptChanged;
     g_aCvarVscriptChanged = new ArrayList(ByteCountToCells(64));
     g_iAllowModeScript    = 5;
     V_snprintf.Enable(Hook_Pre, DTR_PreV_snprintf);
     g_bProcessModeVscript = true;
-    SDKCall(g_hSDK_VScriptRunForAllAddons, g_MapInfo.GameMode, 0, 1);
+    SDKCall(g_hSDK_VScriptRunForAllAddons, g_MapInfo.GameMode, 0, 1);  // 检查当前模式类似coop.nut、mutation4.nut的脚本在当前加载的vpk里是否有
     g_bProcessModeVscript = false;
     V_snprintf.Disable(Hook_Pre, DTR_PreV_snprintf);
 }
@@ -398,6 +405,7 @@ MRESReturn DTR_KeyValues_GetString_Post(Address pKeyValue, DHookReturn hReturn, 
     return MRES_Ignored;
 }
 
+// 脚本加载控制函数
 MRESReturn DTR_PreVScriptServerRunScript(DHookReturn hReturn, DHookParam hParams)
 {
 
@@ -406,7 +414,7 @@ MRESReturn DTR_PreVScriptServerRunScript(DHookReturn hReturn, DHookParam hParams
     char filename[256], buffer[96];
     DHookGetParamString(hParams, 1, filename, sizeof(filename));
 
-    if (g_bProcessModeVscript)
+    if (g_bProcessModeVscript) // 模式脚本控制部分
     {
         g_iAllowModeScript = 0;
         if (StrContains(filename, ".vpk", false) == -1)
@@ -428,7 +436,7 @@ MRESReturn DTR_PreVScriptServerRunScript(DHookReturn hReturn, DHookParam hParams
         hReturn.Value = 1;
         return MRES_Supercede;
     }
-
+    // 其他全局脚本控制部分 _addon
     bool bAllow = true;
     for (int j = 0; g_aGlobalVpkNoAllow != null && j < g_aGlobalVpkNoAllow.Length; j++)
     {
