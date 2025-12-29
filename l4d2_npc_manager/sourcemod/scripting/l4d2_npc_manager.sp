@@ -5,7 +5,7 @@
 #include <dhooks>
 
 #define GAMEDATA         "l4d2_npc_manager"
-#define GAMEDATA_VERSION 27
+#define GAMEDATA_VERSION 29
 
 methodmap GameDataWrapper < GameData
 {
@@ -46,11 +46,13 @@ Handle        g_hSDK_CallGetEntity;
 ConVar        g_hCvar_Origin_UpdateFrequency;
 ConVar        g_hCvar_Plugins;
 ConVar        g_hCvar_UpdateFrequency[10];
+ConVar        g_hCvar_InfectedClimbFix;
 
 enum struct EntityIDData
 {
     int entity;
     int class;
+    Address Locomotion;
 }
 
 EntityIDData
@@ -71,6 +73,7 @@ char g_sConVarString[][][] = {
 
 bool
     g_bPlugins,
+    g_bClimbFix,
     g_bLinuxOS;
 
 int
@@ -92,6 +95,7 @@ public void OnPluginStart()
 {
     g_hCvar_Origin_UpdateFrequency = FindConVar("nb_update_frequency");
     g_hCvar_Plugins                = CreateConVar("nb_uf_onoff", "1", "插件是否接管update frequency,1接管,0不接管", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hCvar_InfectedClimbFix       = CreateConVar("nb_climb_fix", "1", "插件是否开启高刷下小僵尸的爬墙修复", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     char g_Temp[2][128];
     for (int i = 0; i < 10; i++)
     {
@@ -103,6 +107,7 @@ public void OnPluginStart()
 
     g_hCvar_Plugins.AddChangeHook(OnCvarChnaged);
     g_hCvar_Origin_UpdateFrequency.AddChangeHook(OnCvarChnaged);
+    g_hCvar_InfectedClimbFix.AddChangeHook(OnCvarChnaged);
     AutoExecConfig(true, "l4d2_npc_manager");
     HookEvent("round_start_pre_entity", Event_RoundStart, EventHookMode_PostNoCopy);
     InItGameData();
@@ -121,6 +126,7 @@ void OnCvarChnaged(ConVar convar, const char[] oldValue, const char[] newValue)
 void UpdateCvars()
 {
     bool g_bTemp = g_hCvar_Plugins.BoolValue;
+    g_bClimbFix = g_hCvar_InfectedClimbFix.BoolValue;
     if (g_bTemp != g_bPlugins)
     {
         if (g_bTemp)
@@ -145,6 +151,7 @@ void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
     {
         m_botlist[i].entity = -1;
         m_botlist[i].class  = -1;
+        m_botlist[i].Locomotion = Address_Null;
     }
 }
 
@@ -227,7 +234,20 @@ MRESReturn DTR_NextBotManager_ShouldUpdate_Pre(Address pManager, DHookReturn hRe
         if (class == -1) return MRES_Ignored;
 
         int last   = hParams.GetObjectVar(1, 16, ObjectValueType_Int);
-        int update = RoundToNearest(g_fUpdateFrequency[m_botlist[ptr].class] / GetTickInterval());
+        int update = -1;
+        if(class == 0 && g_bClimbFix)
+        {
+            if(m_botlist[ptr].Locomotion != Address_Null)
+            {
+                int type = view_as<int>(LoadFromAddress(m_botlist[ptr].Locomotion + view_as<Address>(212), NumberType_Int8));
+                if(type != 0)
+                    update = RoundToNearest(0.1 / GetTickInterval()); 
+            } 
+        }
+
+        if(update == -1)
+            update = RoundToNearest(g_fUpdateFrequency[m_botlist[ptr].class] / GetTickInterval());
+
         if (current < last + update)
         {
             hReturn.Value = 0;
@@ -244,6 +264,14 @@ MRESReturn DTR_NextBotManager_ShouldUpdate_Pre(Address pManager, DHookReturn hRe
     return MRES_Ignored;
 }
 
+MRESReturn DTR_ZombieBotLocomotion_ZombieBotLocomotion_Post(Address ZombieBotLocomotion, DHookParam hParams)
+{
+    int ptr = hParams.GetObjectVar(1, 8, ObjectValueType_Int);
+    if(0 <= ptr < 2048)
+        m_botlist[ptr].Locomotion = ZombieBotLocomotion;
+    return MRES_Ignored;
+}
+
 void InItGameData()
 {
     CheckGameDataFile();
@@ -254,6 +282,7 @@ void InItGameData()
 
     delete gd.CreateDetourOrFail("NextBotManager::Register", true, _, DTR_NextBotManager_Register_Post);
     delete gd.CreateDetourOrFail("NextBotManager::UnRegister", true, _, DTR_NextBotManager_UnRegister_Post);
+    delete gd.CreateDetourOrFail("ZombieBotLocomotion::ZombieBotLocomotion", true, _, DTR_ZombieBotLocomotion_ZombieBotLocomotion_Post);
 
     Handle g_hSDK_NextBotManager;
     StartPrepSDKCall(SDKCall_Static);
@@ -334,6 +363,13 @@ void CheckGameDataFile()
             hFile.WriteLine("				\"windows\"	\"\\x2A\\x2A\\x2A\\x2A\\x2A\\x2A\\x53\\x56\\x57\\x8B\\x78\\x08\"");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
+            hFile.WriteLine("			\"ZombieBotLocomotion::ZombieBotLocomotion\"");
+            hFile.WriteLine("			{");
+            hFile.WriteLine("				\"library\" \"server\"");
+            hFile.WriteLine("				\"linux\"		\"@_ZN19ZombieBotLocomotionC2EP8INextBot\"");
+            hFile.WriteLine("				\"windows\"	\"\\x55\\x8B\\xEC\\x8B\\x45\\x08\\x56\\x57\\x50\\x8B\\xF1\\xE8\\x2A\\x2A\\x2A\\x2A\\x0F\\x57\\xC0\\xC7\\x06\\x2A\\x2A\\x2A\\x2A\"");
+            hFile.WriteLine("			}");
+            hFile.WriteLine("");
             hFile.WriteLine("			\"TheNextBots\"");
             hFile.WriteLine("			{");
             hFile.WriteLine("				\"library\" \"server\"");
@@ -389,6 +425,21 @@ void CheckGameDataFile()
             hFile.WriteLine("				\"signature\" \"NextBotManager::UnRegister\"");
             hFile.WriteLine("				\"callconv\" \"thiscall\"");
             hFile.WriteLine("				\"return\" \"int\"");
+            hFile.WriteLine("				\"this\" \"address\"");
+            hFile.WriteLine("				\"arguments\"");
+            hFile.WriteLine("				{");
+            hFile.WriteLine("					\"INextBot\"");
+            hFile.WriteLine("					{");
+            hFile.WriteLine("						\"type\" \"objectptr\"");
+            hFile.WriteLine("					}");
+            hFile.WriteLine("				}");
+            hFile.WriteLine("			}");
+            hFile.WriteLine("");
+            hFile.WriteLine("			\"ZombieBotLocomotion::ZombieBotLocomotion\"");
+            hFile.WriteLine("			{");
+            hFile.WriteLine("				\"signature\" \"ZombieBotLocomotion::ZombieBotLocomotion\"");
+            hFile.WriteLine("				\"callconv\" \"thiscall\"");
+            hFile.WriteLine("				\"return\" \"void\"");
             hFile.WriteLine("				\"this\" \"address\"");
             hFile.WriteLine("				\"arguments\"");
             hFile.WriteLine("				{");
