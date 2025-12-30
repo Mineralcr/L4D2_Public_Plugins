@@ -87,7 +87,7 @@ public Plugin myinfo =
     name        = "l4d2_npc_manager",
     author      = "洛琪,小燐RM",    //特别感谢小燐RM为我提供了win 签名支持 Thanks For 小燐RM Support for Windows Signature
     description = "插件控制每种特感、僵尸的刷新率，不同特感可以不同刷新率，适用tank、witch、小僵尸和特感",
-    version     = "1.0",
+    version     = "1.1",
     url         = "https://steamcommunity.com/profiles/76561198812009299/"
 };
 
@@ -95,7 +95,7 @@ public void OnPluginStart()
 {
     g_hCvar_Origin_UpdateFrequency = FindConVar("nb_update_frequency");
     g_hCvar_Plugins                = CreateConVar("nb_uf_onoff", "1", "插件是否接管update frequency,1接管,0不接管", FCVAR_NOTIFY, true, 0.0, true, 1.0);
-    g_hCvar_InfectedClimbFix       = CreateConVar("nb_climb_fix", "1", "插件是否开启高刷下小僵尸的爬墙修复", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_hCvar_InfectedClimbFix       = CreateConVar("nb_climb_fix", "1", "插件是否开启高刷下小僵尸、witch的爬墙修复", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     char g_Temp[2][128];
     for (int i = 0; i < 10; i++)
     {
@@ -235,14 +235,14 @@ MRESReturn DTR_NextBotManager_ShouldUpdate_Pre(Address pManager, DHookReturn hRe
 
         int last   = hParams.GetObjectVar(1, 16, ObjectValueType_Int);
         int update = -1;
-        if(class == 0 && g_bClimbFix)
+        if((class == 0 || class == 7) && g_bClimbFix)
         {
             if(m_botlist[ptr].Locomotion != Address_Null)
             {
                 int type = view_as<int>(LoadFromAddress(m_botlist[ptr].Locomotion + view_as<Address>(212), NumberType_Int8));
                 if(type != 0)
                     update = RoundToNearest(0.1 / GetTickInterval()); 
-            } 
+            }
         }
 
         if(update == -1)
