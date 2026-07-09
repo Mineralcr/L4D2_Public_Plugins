@@ -12,6 +12,8 @@
 #define VPK_RULE_BLACKLIST      2
 #define VPK_RULE_KEY_MAX        600
 #define ADDONLIST_RESTORE_DELAY 0.5
+#define VPK_BINDING_KEY_MAX     1300
+#define VPK_BINDING_DONE_KEY    "__done"
 
 methodmap GameDataWrapper < GameData
 {
@@ -67,7 +69,9 @@ ArrayList
     g_hChangedCvars,
     g_hBlockedMissionVpks,
     g_hAllowedMapVpks,
-    g_hLastFilterTargets;
+    g_hLastFilterTargets,
+    g_hBindingContentSelection[MAXPLAYERS + 1],
+    g_hBindingMapSelection[MAXPLAYERS + 1];
 
 Address
     g_pAddonMetadataVector;
@@ -98,18 +102,20 @@ int
     g_iGbkUnicodeMap[65536];
 
 StringMap
-    g_hVpkRules;
+    g_hVpkRules,
+    g_hVpkBindings;
 
 char
     CurrentMapName[128],
-    g_sVpkRulesPath[PLATFORM_MAX_PATH];
+    g_sVpkRulesPath[PLATFORM_MAX_PATH],
+    g_sPendingDeleteBinding[MAXPLAYERS + 1][VPK_BINDING_KEY_MAX];
 
 public Plugin myinfo =
 {
     name        = "l4d2_vscript_purifier_v2",
     author      = "洛琪, Forgetest",
     description = "防止地图脚本污染",
-    version     = "2.0",
+    version     = "2.1",
     url         = "https://steamcommunity.com/profiles/76561198812009299/"
 };
 
@@ -174,6 +180,11 @@ public void OnPluginEnd()
 
     delete g_hVpkRules;
     g_hVpkRules = null;
+
+    ClearVpkBindings();
+
+    for (int i = 1; i <= MaxClients; i++)
+        ClearClientBindingSelection(i);
 }
 
 public void OnMapEnd()
@@ -184,6 +195,11 @@ public void OnMapEnd()
 public void OnServerEnterHibernation()
 {
     RestoreAddonListFilterNow("server hibernation");
+}
+
+public void OnClientDisconnect(int client)
+{
+    ClearClientBindingSelection(client);
 }
 
 public void OnMapInit(const char[] mapName)
@@ -581,7 +597,13 @@ bool ShouldDisableAddonListKey(const char[] addonKey)
     if (ArrayListHasString(g_hAllowedMapVpks, vpkName, false))
         return false;
 
+    if (IsVpkBoundToAnyMapList(vpkName, g_hAllowedMapVpks))
+        return false;
+
     if (ArrayListHasString(g_hBlockedMissionVpks, vpkName, false))
+        return true;
+
+    if (IsVpkBoundToAnyMapList(vpkName, g_hBlockedMissionVpks))
         return true;
 
     return false;
@@ -610,6 +632,7 @@ void DisplayVpkCategoryMenu(int client)
 
     menu.AddItem("mission", "地图 VPK");
     menu.AddItem("content", "普通 VPK");
+    menu.AddItem("binding", "VPK 绑定");
 
     menu.ExitButton = true;
     menu.Display(client, MENU_TIME_FOREVER);
@@ -624,8 +647,10 @@ public int MenuHandler_VpkCategory(Menu menu, MenuAction action, int client, int
 
         if (StrEqual(info, "mission", false))
             DisplayVpkRuleMenu(client, true);
-        else
+        else if (StrEqual(info, "content", false))
             DisplayVpkRuleMenu(client, false);
+        else if (StrEqual(info, "binding", false))
+            DisplayVpkBindingIntroPanel(client);
     }
     else if (action == MenuAction_Cancel)
     {
@@ -773,6 +798,407 @@ int MenuHandler_VpkRule(Menu menu, MenuAction action, int client, int item)
     return 0;
 }
 
+void DisplayVpkBindingIntroPanel(int client)
+{
+    Panel panel = new Panel();
+
+    panel.SetTitle("VPK 绑定说明");
+    panel.DrawText(" ");
+    panel.DrawText("用于解决一个地图由多个 VPK 构成，");
+    panel.DrawText("但 mission 文件只存在于其中一个 VPK 的情况。");
+    panel.DrawText(" ");
+    panel.DrawText("绑定后，普通 VPK 会被视为指定地图 VPK 的一部分。");
+    panel.DrawText("过滤时仍按地图 VPK 逻辑处理。");
+    panel.DrawText(" ");
+    panel.DrawText("白名单 / 黑名单仍然拥有最高优先级。");
+    panel.DrawText(" ");
+
+    panel.DrawItem("进入绑定菜单");
+    panel.DrawItem("返回");
+
+    panel.Send(client, PanelHandler_VpkBindingIntro, MENU_TIME_FOREVER);
+
+    delete panel;
+}
+
+public int PanelHandler_VpkBindingIntro(Menu menu, MenuAction action, int client, int item)
+{
+    if (action != MenuAction_Select)
+        return 0;
+
+    if (item == 1)
+        DisplayVpkBindingMainMenu(client);
+    else
+        DisplayVpkCategoryMenu(client);
+
+    return 0;
+}
+
+void DisplayVpkBindingMainMenu(int client)
+{
+    Menu menu = new Menu(MenuHandler_VpkBindingMain);
+    menu.SetTitle("VPK 绑定管理");
+
+    menu.AddItem("add", "新增绑定");
+    menu.AddItem("view", "查看 / 取消绑定");
+
+    menu.ExitBackButton = true;
+    menu.ExitButton     = true;
+    menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int MenuHandler_VpkBindingMain(Menu menu, MenuAction action, int client, int item)
+{
+    if (action == MenuAction_Select)
+    {
+        char info[32];
+        menu.GetItem(item, info, sizeof(info));
+
+        if (StrEqual(info, "add", false))
+        {
+            ClearClientBindingSelection(client);
+            EnsureClientBindingSelection(client);
+            DisplayVpkBindingContentSelectMenu(client);
+        }
+        else if (StrEqual(info, "view", false))
+        {
+            DisplayVpkBindingListMenu(client);
+        }
+    }
+    else if (action == MenuAction_Cancel)
+    {
+        if (item == MenuCancel_ExitBack)
+            DisplayVpkCategoryMenu(client);
+    }
+    else if (action == MenuAction_End)
+    {
+        delete menu;
+    }
+
+    return 0;
+}
+
+void DisplayVpkBindingContentSelectMenu(int client)
+{
+    EnsureClientBindingSelection(client);
+
+    Menu menu = new Menu(MenuHandler_VpkBindingContentSelect);
+    menu.SetTitle("第一步：选择普通 VPK，可多选");
+
+    if (g_hBindingContentSelection[client].Length > 0)
+        menu.AddItem(VPK_BINDING_DONE_KEY, "下一步：选择地图 VPK");
+    else
+        menu.AddItem(VPK_BINDING_DONE_KEY, "下一步：选择地图 VPK", ITEMDRAW_DISABLED);
+
+    if (g_hContentList == null || g_hContentList.Length == 0)
+    {
+        menu.AddItem("", "当前没有扫描到普通 VPK", ITEMDRAW_DISABLED);
+    }
+    else
+    {
+        char vpkName[256];
+        char displayName[256];
+        char display[300];
+
+        for (int i = 0; i < g_hContentList.Length; i++)
+        {
+            g_hContentList.GetString(i, vpkName, sizeof(vpkName));
+            FormatDisplayVpkName(vpkName, displayName, sizeof(displayName));
+
+            if (ArrayListHasString(g_hBindingContentSelection[client], vpkName, false))
+                FormatEx(display, sizeof(display), "[已选] %s", displayName);
+            else
+                FormatEx(display, sizeof(display), "[未选] %s", displayName);
+
+            menu.AddItem(vpkName, display);
+        }
+    }
+
+    menu.ExitBackButton = true;
+    menu.ExitButton     = true;
+    menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int MenuHandler_VpkBindingContentSelect(Menu menu, MenuAction action, int client, int item)
+{
+    if (action == MenuAction_Select)
+    {
+        char info[256];
+        menu.GetItem(item, info, sizeof(info));
+
+        if (StrEqual(info, VPK_BINDING_DONE_KEY, false))
+        {
+            DisplayVpkBindingMapSelectMenu(client);
+            return 0;
+        }
+
+        ToggleArrayListString(g_hBindingContentSelection[client], info);
+        DisplayVpkBindingContentSelectMenu(client);
+    }
+    else if (action == MenuAction_Cancel)
+    {
+        if (item == MenuCancel_ExitBack)
+            DisplayVpkBindingMainMenu(client);
+        else
+            ClearClientBindingSelection(client);
+    }
+    else if (action == MenuAction_End)
+    {
+        delete menu;
+    }
+
+    return 0;
+}
+
+void DisplayVpkBindingMapSelectMenu(int client)
+{
+    EnsureClientBindingSelection(client);
+
+    Menu menu = new Menu(MenuHandler_VpkBindingMapSelect);
+    menu.SetTitle("第二步：选择绑定的地图 VPK，可多选");
+
+    if (g_hBindingMapSelection[client].Length > 0)
+        menu.AddItem(VPK_BINDING_DONE_KEY, "完成绑定");
+    else
+        menu.AddItem(VPK_BINDING_DONE_KEY, "完成绑定", ITEMDRAW_DISABLED);
+
+    ArrayList mapList = new ArrayList(ByteCountToCells(256));
+    char      vpkName[256];
+
+    if (g_hAllowedMapVpks != null)
+    {
+        for (int i = 0; i < g_hAllowedMapVpks.Length; i++)
+        {
+            g_hAllowedMapVpks.GetString(i, vpkName, sizeof(vpkName));
+            PushStringUnique(mapList, vpkName);
+        }
+    }
+
+    if (g_hBlockedMissionVpks != null)
+    {
+        for (int i = 0; i < g_hBlockedMissionVpks.Length; i++)
+        {
+            g_hBlockedMissionVpks.GetString(i, vpkName, sizeof(vpkName));
+            PushStringUnique(mapList, vpkName);
+        }
+    }
+
+    if (mapList.Length == 0)
+    {
+        menu.AddItem("", "当前没有扫描到地图 VPK", ITEMDRAW_DISABLED);
+    }
+    else
+    {
+        char displayName[256];
+        char display[300];
+
+        for (int i = 0; i < mapList.Length; i++)
+        {
+            mapList.GetString(i, vpkName, sizeof(vpkName));
+            FormatDisplayVpkName(vpkName, displayName, sizeof(displayName));
+
+            if (ArrayListHasString(g_hBindingMapSelection[client], vpkName, false))
+                FormatEx(display, sizeof(display), "[已选] %s", displayName);
+            else
+                FormatEx(display, sizeof(display), "[未选] %s", displayName);
+
+            menu.AddItem(vpkName, display);
+        }
+    }
+
+    delete mapList;
+
+    menu.ExitBackButton = true;
+    menu.ExitButton     = true;
+    menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int MenuHandler_VpkBindingMapSelect(Menu menu, MenuAction action, int client, int item)
+{
+    if (action == MenuAction_Select)
+    {
+        char info[256];
+        menu.GetItem(item, info, sizeof(info));
+
+        if (StrEqual(info, VPK_BINDING_DONE_KEY, false))
+        {
+            SaveSelectedVpkBindings(client);
+            ClearClientBindingSelection(client);
+            DisplayVpkBindingMainMenu(client);
+            return 0;
+        }
+
+        ToggleArrayListString(g_hBindingMapSelection[client], info);
+        DisplayVpkBindingMapSelectMenu(client);
+    }
+    else if (action == MenuAction_Cancel)
+    {
+        if (item == MenuCancel_ExitBack)
+            DisplayVpkBindingContentSelectMenu(client);
+        else
+            ClearClientBindingSelection(client);
+    }
+    else if (action == MenuAction_End)
+    {
+        delete menu;
+    }
+
+    return 0;
+}
+
+void SaveSelectedVpkBindings(int client)
+{
+    char contentVpk[256];
+    char mapVpk[256];
+
+    int  count = 0;
+
+    for (int i = 0; i < g_hBindingContentSelection[client].Length; i++)
+    {
+        g_hBindingContentSelection[client].GetString(i, contentVpk, sizeof(contentVpk));
+
+        for (int j = 0; j < g_hBindingMapSelection[client].Length; j++)
+        {
+            g_hBindingMapSelection[client].GetString(j, mapVpk, sizeof(mapVpk));
+            SetVpkBinding(contentVpk, mapVpk, true);
+            count++;
+        }
+    }
+
+    PrintToChat(client, "\x04[VPK]\x01 已新增 %d 条 VPK 绑定。", count);
+}
+
+void DisplayVpkBindingListMenu(int client)
+{
+    Menu menu = new Menu(MenuHandler_VpkBindingList);
+    menu.SetTitle("查看 / 取消 VPK 绑定");
+
+    if (g_hVpkBindings == null)
+    {
+        menu.AddItem("", "当前没有绑定关系", ITEMDRAW_DISABLED);
+    }
+    else
+    {
+        StringMapSnapshot snapshot = g_hVpkBindings.Snapshot();
+
+        if (snapshot.Length == 0)
+        {
+            menu.AddItem("", "当前没有绑定关系", ITEMDRAW_DISABLED);
+        }
+        else
+        {
+            char bindingKey[VPK_BINDING_KEY_MAX];
+            char contentVpk[256];
+            char mapVpk[256];
+            char contentDisplay[256];
+            char mapDisplay[256];
+            char display[600];
+
+            for (int i = 0; i < snapshot.Length; i++)
+            {
+                snapshot.GetKey(i, bindingKey, sizeof(bindingKey));
+
+                if (!ParseVpkBindingStorageKey(bindingKey, contentVpk, sizeof(contentVpk), mapVpk, sizeof(mapVpk)))
+                    continue;
+
+                FormatDisplayVpkName(contentVpk, contentDisplay, sizeof(contentDisplay));
+                FormatDisplayVpkName(mapVpk, mapDisplay, sizeof(mapDisplay));
+
+                FormatEx(display, sizeof(display), "%s -> %s", contentDisplay, mapDisplay);
+                menu.AddItem(bindingKey, display);
+            }
+        }
+
+        delete snapshot;
+    }
+
+    menu.ExitBackButton = true;
+    menu.ExitButton     = true;
+    menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int MenuHandler_VpkBindingList(Menu menu, MenuAction action, int client, int item)
+{
+    if (action == MenuAction_Select)
+    {
+        char bindingKey[VPK_BINDING_KEY_MAX];
+        menu.GetItem(item, bindingKey, sizeof(bindingKey));
+
+        strcopy(g_sPendingDeleteBinding[client], sizeof(g_sPendingDeleteBinding[]), bindingKey);
+        DisplayVpkBindingDeleteConfirmPanel(client);
+    }
+    else if (action == MenuAction_Cancel)
+    {
+        if (item == MenuCancel_ExitBack)
+            DisplayVpkBindingMainMenu(client);
+    }
+    else if (action == MenuAction_End)
+    {
+        delete menu;
+    }
+
+    return 0;
+}
+
+void DisplayVpkBindingDeleteConfirmPanel(int client)
+{
+    char contentVpk[256];
+    char mapVpk[256];
+    char contentDisplay[256];
+    char mapDisplay[256];
+
+    ParseVpkBindingStorageKey(
+        g_sPendingDeleteBinding[client],
+        contentVpk,
+        sizeof(contentVpk),
+        mapVpk,
+        sizeof(mapVpk));
+
+    FormatDisplayVpkName(contentVpk, contentDisplay, sizeof(contentDisplay));
+    FormatDisplayVpkName(mapVpk, mapDisplay, sizeof(mapDisplay));
+
+    Panel panel = new Panel();
+    panel.SetTitle("取消 VPK 绑定");
+    panel.DrawText(" ");
+    panel.DrawText(contentDisplay);
+    panel.DrawText("绑定到：");
+    panel.DrawText(mapDisplay);
+    panel.DrawText(" ");
+
+    panel.DrawItem("确认取消");
+    panel.DrawItem("返回");
+
+    panel.Send(client, PanelHandler_VpkBindingDeleteConfirm, MENU_TIME_FOREVER);
+
+    delete panel;
+}
+
+public int PanelHandler_VpkBindingDeleteConfirm(Menu menu, MenuAction action, int client, int item)
+{
+    if (action != MenuAction_Select)
+        return 0;
+
+    if (item == 1)
+    {
+        if (g_hVpkBindings != null && g_sPendingDeleteBinding[client][0] != '\0')
+        {
+            g_hVpkBindings.Remove(g_sPendingDeleteBinding[client]);
+            SaveVpkRulesCache();
+
+            PrintToChat(client, "\x04[VPK]\x01 已取消该 VPK 绑定。");
+        }
+
+        g_sPendingDeleteBinding[client][0] = '\0';
+        DisplayVpkBindingListMenu(client);
+    }
+    else
+    {
+        DisplayVpkBindingListMenu(client);
+    }
+
+    return 0;
+}
+
 bool HasBlacklistedVpkRules()
 {
     return g_iBlacklistedRuleCount > 0;
@@ -811,7 +1237,9 @@ void GetVpkRuleName(int rule, char[] buffer, int maxlen)
 void LoadVpkRulesCache()
 {
     delete g_hVpkRules;
+    ClearVpkBindings();
     g_hVpkRules             = new StringMap();
+    g_hVpkBindings          = new StringMap();
 
     g_iBlacklistedRuleCount = 0;
 
@@ -857,6 +1285,27 @@ void LoadVpkRulesCache()
         while (kv.GotoNextKey());
     }
 
+    if (kv.JumpToKey("Bindings"))
+    {
+        if (kv.GotoFirstSubKey())
+        {
+            char bindingKey[VPK_BINDING_KEY_MAX];
+
+            do
+            {
+                kv.GetSectionName(bindingKey, sizeof(bindingKey));
+
+                if (IsVpkBindingStorageKey(bindingKey))
+                    g_hVpkBindings.SetValue(bindingKey, 1);
+            }
+            while (kv.GotoNextKey());
+
+            kv.GoBack();
+        }
+
+        kv.GoBack();
+    }
+
     delete kv;
 }
 
@@ -886,6 +1335,26 @@ bool SaveVpkRulesCache()
     }
 
     delete snapshot;
+
+    if (g_hVpkBindings != null && kv.JumpToKey("Bindings", true))
+    {
+        StringMapSnapshot bindingSnapshot = g_hVpkBindings.Snapshot();
+        char              bindingKey[VPK_BINDING_KEY_MAX];
+
+        for (int i = 0; i < bindingSnapshot.Length; i++)
+        {
+            bindingSnapshot.GetKey(i, bindingKey, sizeof(bindingKey));
+
+            if (!kv.JumpToKey(bindingKey, true))
+                continue;
+
+            kv.SetNum("bind", 1);
+            kv.GoBack();
+        }
+
+        delete bindingSnapshot;
+        kv.GoBack();
+    }
 
     bool result = kv.ExportToFile(g_sVpkRulesPath);
 
@@ -996,6 +1465,27 @@ bool ArrayListStringSetEquals(ArrayList listA, ArrayList listB)
     }
 
     return true;
+}
+
+void ToggleArrayListString(ArrayList list, const char[] value)
+{
+    if (list == null)
+        return;
+
+    char buffer[256];
+
+    for (int i = 0; i < list.Length; i++)
+    {
+        list.GetString(i, buffer, sizeof(buffer));
+
+        if (StrEqual(buffer, value, false))
+        {
+            list.Erase(i);
+            return;
+        }
+    }
+
+    list.PushString(value);
 }
 
 void SaveLastFilterTargets()
@@ -1382,6 +1872,174 @@ void BuildVpkRuleStorageKey(const char[] vpkName, char[] buffer, int maxlen)
     }
 
     buffer[pos] = '\0';
+}
+
+void ClearVpkBindings()
+{
+    delete g_hVpkBindings;
+    g_hVpkBindings = null;
+}
+
+void ClearClientBindingSelection(int client)
+{
+    if (client <= 0 || client > MaxClients)
+        return;
+
+    delete g_hBindingContentSelection[client];
+    g_hBindingContentSelection[client] = null;
+
+    delete g_hBindingMapSelection[client];
+    g_hBindingMapSelection[client]     = null;
+
+    g_sPendingDeleteBinding[client][0] = '\0';
+}
+
+void EnsureClientBindingSelection(int client)
+{
+    if (g_hBindingContentSelection[client] == null)
+        g_hBindingContentSelection[client] = new ArrayList(ByteCountToCells(256));
+
+    if (g_hBindingMapSelection[client] == null)
+        g_hBindingMapSelection[client] = new ArrayList(ByteCountToCells(256));
+}
+
+bool DecodeVpkRuleStorageKey(const char[] key, char[] output, int maxlen)
+{
+    output[0] = '\0';
+
+    if (!IsVpkRuleStorageKey(key))
+        return false;
+
+    int outPos = 0;
+    int len    = strlen(key);
+
+    for (int i = 4; i + 1 < len && outPos + 1 < maxlen; i += 2)
+    {
+        int high = HexDigitValue(key[i]);
+        int low  = HexDigitValue(key[i + 1]);
+
+        if (high < 0 || low < 0)
+            return false;
+
+        output[outPos++] = view_as<char>((high << 4) | low);
+    }
+
+    output[outPos] = '\0';
+    return true;
+}
+
+void BuildVpkBindingStorageKey(const char[] contentVpk, const char[] mapVpk, char[] buffer, int maxlen)
+{
+    char contentKey[VPK_RULE_KEY_MAX];
+    char mapKey[VPK_RULE_KEY_MAX];
+
+    BuildVpkRuleStorageKey(contentVpk, contentKey, sizeof(contentKey));
+    BuildVpkRuleStorageKey(mapVpk, mapKey, sizeof(mapKey));
+
+    FormatEx(buffer, maxlen, "bind_%s__%s", contentKey, mapKey);
+}
+
+bool IsVpkBindingStorageKey(const char[] key)
+{
+    if (strncmp(key, "bind_", 5, false) != 0)
+        return false;
+
+    int separator = StrContains(key, "__", false);
+    if (separator <= 5)
+        return false;
+
+    char contentKey[VPK_RULE_KEY_MAX];
+    char mapKey[VPK_RULE_KEY_MAX];
+
+    int  contentLen = separator - 5;
+    if (contentLen <= 0 || contentLen >= sizeof(contentKey))
+        return false;
+
+    for (int i = 0; i < contentLen; i++)
+        contentKey[i] = key[5 + i];
+
+    contentKey[contentLen] = '\0';
+
+    strcopy(mapKey, sizeof(mapKey), key[separator + 2]);
+
+    return IsVpkRuleStorageKey(contentKey) && IsVpkRuleStorageKey(mapKey);
+}
+
+bool ParseVpkBindingStorageKey(const char[] bindingKey, char[] contentVpk, int contentMaxlen, char[] mapVpk, int mapMaxlen)
+{
+    contentVpk[0] = '\0';
+    mapVpk[0]     = '\0';
+
+    if (!IsVpkBindingStorageKey(bindingKey))
+        return false;
+
+    int  separator = StrContains(bindingKey, "__", false);
+
+    char contentKey[VPK_RULE_KEY_MAX];
+    char mapKey[VPK_RULE_KEY_MAX];
+
+    int  contentLen = separator - 5;
+
+    for (int i = 0; i < contentLen; i++)
+        contentKey[i] = bindingKey[5 + i];
+
+    contentKey[contentLen] = '\0';
+
+    strcopy(mapKey, sizeof(mapKey), bindingKey[separator + 2]);
+
+    if (!DecodeVpkRuleStorageKey(contentKey, contentVpk, contentMaxlen))
+        return false;
+
+    if (!DecodeVpkRuleStorageKey(mapKey, mapVpk, mapMaxlen))
+        return false;
+
+    return true;
+}
+
+bool SetVpkBinding(const char[] contentVpk, const char[] mapVpk, bool enabled)
+{
+    if (g_hVpkBindings == null)
+        g_hVpkBindings = new StringMap();
+
+    char bindingKey[VPK_BINDING_KEY_MAX];
+    BuildVpkBindingStorageKey(contentVpk, mapVpk, bindingKey, sizeof(bindingKey));
+
+    if (enabled)
+        g_hVpkBindings.SetValue(bindingKey, 1);
+    else
+        g_hVpkBindings.Remove(bindingKey);
+
+    return SaveVpkRulesCache();
+}
+
+bool IsVpkBoundToMap(const char[] contentVpk, const char[] mapVpk)
+{
+    if (g_hVpkBindings == null)
+        return false;
+
+    char bindingKey[VPK_BINDING_KEY_MAX];
+    BuildVpkBindingStorageKey(contentVpk, mapVpk, bindingKey, sizeof(bindingKey));
+
+    int value;
+    return g_hVpkBindings.GetValue(bindingKey, value);
+}
+
+bool IsVpkBoundToAnyMapList(const char[] contentVpk, ArrayList mapList)
+{
+    if (g_hVpkBindings == null || mapList == null)
+        return false;
+
+    char mapVpk[256];
+
+    for (int i = 0; i < mapList.Length; i++)
+    {
+        mapList.GetString(i, mapVpk, sizeof(mapVpk));
+
+        if (IsVpkBoundToMap(contentVpk, mapVpk))
+            return true;
+    }
+
+    return false;
 }
 
 void ReadMemoryString(Address addr, char[] buffer, int size)
@@ -1779,4 +2437,3 @@ void CheckGameDataFile()
 
     delete hFile;
 }
-
