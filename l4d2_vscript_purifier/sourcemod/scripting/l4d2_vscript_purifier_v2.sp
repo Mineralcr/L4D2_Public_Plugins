@@ -504,7 +504,7 @@ bool RestoreAddonListFilterNow(const char[] reason)
     if (!g_bAddonListFilterApplied && !g_bAddonListFilterArmed)
         return false;
 
-    g_bAddonListFilterArmed = false;
+    g_bAddonListFilterArmed    = false;
     g_bAddonListRestorePending = true;
 
     if (!ExecuteUpdateAddonPaths(reason))
@@ -583,7 +583,7 @@ bool ExecuteUpdateAddonPaths(const char[] reason)
 
 public Action Command_VpkList(int client, int args)
 {
-    if (client <= 0)
+    if (!IsValidMenuClient(client))
         return Plugin_Handled;
 
     DisplayVpkCategoryMenu(client);
@@ -592,6 +592,9 @@ public Action Command_VpkList(int client, int args)
 
 void DisplayVpkCategoryMenu(int client)
 {
+    if (!IsValidMenuClient(client))
+        return;
+
     Menu menu = new Menu(MenuHandler_VpkCategory);
     menu.SetTitle("VPK 黑白名单管理");
 
@@ -605,6 +608,9 @@ void DisplayVpkCategoryMenu(int client)
 
 public int MenuHandler_VpkCategory(Menu menu, MenuAction action, int client, int item)
 {
+    if ((action == MenuAction_Select || action == MenuAction_Cancel) && !IsValidMenuClient(client))
+        return 0;
+
     if (action == MenuAction_Select)
     {
         char info[32];
@@ -631,6 +637,8 @@ public int MenuHandler_VpkCategory(Menu menu, MenuAction action, int client, int
 
 void DisplayVpkRuleMenu(int client, bool missionVpk)
 {
+    if (!IsValidMenuClient(client))
+        return;
     Menu menu = new Menu(MenuHandler_VpkRule);
 
     if (missionVpk)
@@ -710,6 +718,9 @@ void DisplayVpkRuleMenu(int client, bool missionVpk)
 
 int MenuHandler_VpkRule(Menu menu, MenuAction action, int client, int item)
 {
+    if ((action == MenuAction_Select || action == MenuAction_Cancel) && !IsValidMenuClient(client))
+        return 0;
+
     if (action == MenuAction_Select)
     {
         char info[300];
@@ -765,6 +776,8 @@ int MenuHandler_VpkRule(Menu menu, MenuAction action, int client, int item)
 
 void DisplayVpkBindingIntroPanel(int client)
 {
+    if (!IsValidMenuClient(client))
+        return;
     Panel panel = new Panel();
 
     panel.SetTitle("VPK 绑定说明");
@@ -791,6 +804,9 @@ public int PanelHandler_VpkBindingIntro(Menu menu, MenuAction action, int client
     if (action != MenuAction_Select)
         return 0;
 
+    if (!IsValidMenuClient(client))
+        return 0;
+
     if (item == 1)
         DisplayVpkBindingMainMenu(client);
     else
@@ -801,6 +817,8 @@ public int PanelHandler_VpkBindingIntro(Menu menu, MenuAction action, int client
 
 void DisplayVpkBindingMainMenu(int client)
 {
+    if (!IsValidMenuClient(client))
+        return;
     Menu menu = new Menu(MenuHandler_VpkBindingMain);
     menu.SetTitle("VPK 绑定管理");
 
@@ -814,6 +832,9 @@ void DisplayVpkBindingMainMenu(int client)
 
 public int MenuHandler_VpkBindingMain(Menu menu, MenuAction action, int client, int item)
 {
+    if ((action == MenuAction_Select || action == MenuAction_Cancel) && !IsValidMenuClient(client))
+        return 0;
+
     if (action == MenuAction_Select)
     {
         char info[32];
@@ -845,6 +866,8 @@ public int MenuHandler_VpkBindingMain(Menu menu, MenuAction action, int client, 
 
 void DisplayVpkBindingContentSelectMenu(int client)
 {
+    if (!IsValidMenuClient(client))
+        return;
     EnsureClientBindingSelection(client);
 
     Menu menu = new Menu(MenuHandler_VpkBindingContentSelect);
@@ -886,6 +909,9 @@ void DisplayVpkBindingContentSelectMenu(int client)
 
 public int MenuHandler_VpkBindingContentSelect(Menu menu, MenuAction action, int client, int item)
 {
+    if ((action == MenuAction_Select || action == MenuAction_Cancel) && !IsValidMenuClient(client))
+        return 0;
+
     if (action == MenuAction_Select)
     {
         char info[256];
@@ -897,6 +923,7 @@ public int MenuHandler_VpkBindingContentSelect(Menu menu, MenuAction action, int
             return 0;
         }
 
+        EnsureClientBindingSelection(client);
         ToggleArrayListString(g_hBindingContentSelection[client], info);
         DisplayVpkBindingContentSelectMenu(client);
     }
@@ -917,6 +944,8 @@ public int MenuHandler_VpkBindingContentSelect(Menu menu, MenuAction action, int
 
 void DisplayVpkBindingMapSelectMenu(int client)
 {
+    if (!IsValidMenuClient(client))
+        return;
     EnsureClientBindingSelection(client);
 
     Menu menu = new Menu(MenuHandler_VpkBindingMapSelect);
@@ -980,6 +1009,9 @@ void DisplayVpkBindingMapSelectMenu(int client)
 
 public int MenuHandler_VpkBindingMapSelect(Menu menu, MenuAction action, int client, int item)
 {
+    if ((action == MenuAction_Select || action == MenuAction_Cancel) && !IsValidMenuClient(client))
+        return 0;
+
     if (action == MenuAction_Select)
     {
         char info[256];
@@ -993,6 +1025,7 @@ public int MenuHandler_VpkBindingMapSelect(Menu menu, MenuAction action, int cli
             return 0;
         }
 
+        EnsureClientBindingSelection(client);
         ToggleArrayListString(g_hBindingMapSelection[client], info);
         DisplayVpkBindingMapSelectMenu(client);
     }
@@ -1035,6 +1068,8 @@ void SaveSelectedVpkBindings(int client)
 
 void DisplayVpkBindingListMenu(int client)
 {
+    if (!IsValidMenuClient(client))
+        return;
     Menu menu = new Menu(MenuHandler_VpkBindingList);
     menu.SetTitle("查看 / 取消 VPK 绑定");
 
@@ -1084,6 +1119,9 @@ void DisplayVpkBindingListMenu(int client)
 
 public int MenuHandler_VpkBindingList(Menu menu, MenuAction action, int client, int item)
 {
+    if (!IsValidMenuClient(client))
+        return 0;
+
     if (action == MenuAction_Select)
     {
         char bindingKey[VPK_BINDING_KEY_MAX];
