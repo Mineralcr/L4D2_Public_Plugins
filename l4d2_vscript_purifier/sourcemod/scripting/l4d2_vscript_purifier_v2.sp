@@ -89,10 +89,8 @@ bool
     g_bAddonListUpdateActive,
     g_bGbkMapLoaded,
     g_bAddonListFilterApplied,
-    g_bAddonListRestorePending;
-
-Handle
-    g_hAddonListRestoreTimer;
+    g_bAddonListRestorePending,
+    g_bExecutingUpdateAddonPaths;
 
 int
     g_iCvarSwitch,
@@ -115,7 +113,7 @@ public Plugin myinfo =
     name        = "l4d2_vscript_purifier_v2",
     author      = "洛琪, Forgetest",
     description = "防止地图脚本污染",
-    version     = "2.1",
+    version     = "2.2",
     url         = "https://steamcommunity.com/profiles/76561198812009299/"
 };
 
@@ -140,7 +138,7 @@ public void OnPluginStart()
         true,
         0.0,
         true,
-        3.0);
+        1.0);
 
     g_hCvarRestore = CreateConVar(
         "l4d2_vscript_cvarRestore_v2",
@@ -176,8 +174,6 @@ public void OnPluginStart()
 
 public void OnPluginEnd()
 {
-    RestoreAddonListFilterNow("plugin end");
-
     delete g_hVpkRules;
     g_hVpkRules = null;
 
@@ -185,16 +181,6 @@ public void OnPluginEnd()
 
     for (int i = 1; i <= MaxClients; i++)
         ClearClientBindingSelection(i);
-}
-
-public void OnMapEnd()
-{
-    RestoreAddonListFilterNow("map end");
-}
-
-public void OnServerEnterHibernation()
-{
-    RestoreAddonListFilterNow("server hibernation");
 }
 
 public void OnClientDisconnect(int client)
@@ -345,10 +331,9 @@ MRESReturn DTR_PreVScriptServerRunScriptForAllAddons(DHookReturn hReturn, DHookP
 
 MRESReturn DTR_PostVScriptServerRunScriptForAllAddons(DHookReturn hReturn, DHookParam hParams)
 {
-    ScheduleAddonListRestore();
+    RestoreAddonListFilterNow("post addon scripts");
     return MRES_Ignored;
 }
-
 MRESReturn DTR_PreCDirectorChallengeMode_InitScriptsNonVirtual(DHookReturn hReturn)
 {
     ApplyAddonListFilter();
@@ -357,7 +342,7 @@ MRESReturn DTR_PreCDirectorChallengeMode_InitScriptsNonVirtual(DHookReturn hRetu
 
 MRESReturn DTR_PostCDirectorChallengeMode_InitScriptsNonVirtual(DHookReturn hReturn, DHookParam hParams)
 {
-    ScheduleAddonListRestore();
+    RestoreAddonListFilterNow("post challenge scripts");
     return MRES_Ignored;
 }
 
@@ -400,7 +385,7 @@ MRESReturn DTR_LoadAddonListFile_Post(DHookReturn hReturn, DHookParam hParams)
     if (ppKv != Address_Null)
         pKv = view_as<Address>(LoadFromAddress(ppKv, NumberType_Int32));
 
-    if (pKv == Address_Null)
+    if (hReturn.Value == 0 || pKv == Address_Null)
         return MRES_Ignored;
 
     SourceKeyValues kv = view_as<SourceKeyValues>(pKv);
@@ -466,7 +451,6 @@ MRESReturn DTR_KeyValues_GetString_Post(Address pKeyValue, DHookReturn hReturn, 
 
 MRESReturn DTR_PreCServerGameDLL_GetMatchmakingGameData(DHookReturn hReturn, DHookParam hParams)
 {
-    RestoreAddonListFilterNow("before matchmaking data");
     return MRES_Ignored;
 }
 
@@ -491,8 +475,6 @@ bool ApplyAddonListFilter()
     if ((g_hBlockedMissionVpks == null || g_hBlockedMissionVpks.Length == 0) && !HasBlacklistedVpkRules())
         return false;
 
-    KillAddonListRestoreTimer();
-
     if (g_bAddonListFilterApplied && ArrayListStringSetEquals(g_hLastFilterTargets, g_hBlockedMissionVpks))
     {
         return true;
@@ -503,59 +485,33 @@ bool ApplyAddonListFilter()
 
     SaveLastFilterTargets();
 
-    ExecuteUpdateAddonPaths("apply memory filter");
+    if (!ExecuteUpdateAddonPaths("apply memory filter"))
+    {
+        g_bAddonListFilterArmed = false;
+        return false;
+    }
 
     g_bAddonListFilterApplied = true;
 
     return true;
 }
 
-void ScheduleAddonListRestore()
-{
-    if (!g_bAddonListFilterApplied)
-        return;
-
-    KillAddonListRestoreTimer();
-
-    g_hAddonListRestoreTimer = CreateTimer(
-        ADDONLIST_RESTORE_DELAY,
-        Timer_RestoreAddonListFilter,
-        _,
-        TIMER_FLAG_NO_MAPCHANGE);
-}
-
-void KillAddonListRestoreTimer()
-{
-    if (g_hAddonListRestoreTimer != null)
-    {
-        KillTimer(g_hAddonListRestoreTimer);
-        g_hAddonListRestoreTimer = null;
-    }
-}
-
-Action Timer_RestoreAddonListFilter(Handle timer)
-{
-    if (timer == g_hAddonListRestoreTimer)
-        g_hAddonListRestoreTimer = null;
-
-    RestoreAddonListFilterNow("restore timer");
-
-    return Plugin_Stop;
-}
-
 bool RestoreAddonListFilterNow(const char[] reason)
 {
-    KillAddonListRestoreTimer();
+    if (g_bAddonListRestorePending)
+        return false;
 
     if (!g_bAddonListFilterApplied && !g_bAddonListFilterArmed)
-    {
         return false;
-    }
 
-    g_bAddonListFilterArmed    = false;
+    g_bAddonListFilterArmed = false;
     g_bAddonListRestorePending = true;
 
-    ExecuteUpdateAddonPaths(reason);
+    if (!ExecuteUpdateAddonPaths(reason))
+    {
+        g_bAddonListRestorePending = false;
+        return false;
+    }
 
     return true;
 }
@@ -563,7 +519,9 @@ bool RestoreAddonListFilterNow(const char[] reason)
 void ApplyAddonListKeyValuesFilter(SourceKeyValues kv)
 {
     if (kv.IsNull())
+    {
         return;
+    }
 
     SourceKeyValues cur = kv.GetFirstValue();
 
@@ -609,11 +567,18 @@ bool ShouldDisableAddonListKey(const char[] addonKey)
     return false;
 }
 
-void ExecuteUpdateAddonPaths(const char[] reason)
+bool ExecuteUpdateAddonPaths(const char[] reason)
 {
+    if (g_bExecutingUpdateAddonPaths)
+        return false;
+
+    g_bExecutingUpdateAddonPaths = true;
     ServerCommand("update_addon_paths");
     ServerExecute();
     LogMessage("update addon paths reason: %s", reason);
+    g_bExecutingUpdateAddonPaths = false;
+
+    return true;
 }
 
 public Action Command_VpkList(int client, int args)
@@ -2056,6 +2021,11 @@ void ReadMemoryString(Address addr, char[] buffer, int size)
     }
 
     buffer[i] = '\0';
+}
+
+bool IsValidMenuClient(int client)
+{
+    return client > 0 && client <= MaxClients && IsClientInGame(client);
 }
 
 void InitGameData()
