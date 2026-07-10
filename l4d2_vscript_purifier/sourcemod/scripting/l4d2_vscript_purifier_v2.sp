@@ -143,12 +143,12 @@ public void OnPluginStart()
     g_hCvarRestore = CreateConVar(
         "l4d2_vscript_cvarRestore_v2",
         "1",
-        "是否在过关时自动还原被脚本修改的cvar值,1是,0否.",
+        "脚本修改 cvar 的处理方式：0=不处理，1=过关/回合开始时恢复默认值，2=直接拦截脚本修改请求。",
         FCVAR_NOTIFY,
         true,
         0.0,
         true,
-        1.0);
+        2.0);
 
     g_hCvarSwitch.AddChangeHook(OnCvarChanged);
     g_hCvarRestore.AddChangeHook(OnCvarChanged);
@@ -456,6 +456,15 @@ MRESReturn DTR_PreCServerGameDLL_GetMatchmakingGameData(DHookReturn hReturn, DHo
 
 MRESReturn DTR_PreCScriptConvarAccessor_SetValue(DHookReturn hReturn, DHookParam hParams)
 {
+    if (g_iCvarRestore == 2)
+    {
+        hReturn.Value = 0;
+        return MRES_Supercede;
+    }
+
+    if (g_iCvarRestore != 1)
+        return MRES_Ignored;
+
     char cvarName[64];
     DHookGetParamString(hParams, 1, cvarName, sizeof(cvarName));
 
@@ -1119,7 +1128,7 @@ void DisplayVpkBindingListMenu(int client)
 
 public int MenuHandler_VpkBindingList(Menu menu, MenuAction action, int client, int item)
 {
-    if (!IsValidMenuClient(client))
+    if ((action == MenuAction_Select || action == MenuAction_Cancel) && !IsValidMenuClient(client))
         return 0;
 
     if (action == MenuAction_Select)
@@ -1145,6 +1154,9 @@ public int MenuHandler_VpkBindingList(Menu menu, MenuAction action, int client, 
 
 void DisplayVpkBindingDeleteConfirmPanel(int client)
 {
+    if (!IsValidMenuClient(client))
+        return;
+
     char contentVpk[256];
     char mapVpk[256];
     char contentDisplay[256];
@@ -1179,6 +1191,9 @@ void DisplayVpkBindingDeleteConfirmPanel(int client)
 public int PanelHandler_VpkBindingDeleteConfirm(Menu menu, MenuAction action, int client, int item)
 {
     if (action != MenuAction_Select)
+        return 0;
+
+    if (!IsValidMenuClient(client))
         return 0;
 
     if (item == 1)
