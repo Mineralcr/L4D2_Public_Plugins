@@ -5,15 +5,14 @@
 #include <dhooks>
 #include <l4d2_source_keyvalues>
 
-#define GAMEDATA                "l4d2_vscript_purifier_v2"
-#define GAMEDATA_VERSION        8
-#define VPK_RULE_NONE           0
-#define VPK_RULE_WHITELIST      1
-#define VPK_RULE_BLACKLIST      2
-#define VPK_RULE_KEY_MAX        600
-#define ADDONLIST_RESTORE_DELAY 0.5
-#define VPK_BINDING_KEY_MAX     1300
-#define VPK_BINDING_DONE_KEY    "__done"
+#define GAMEDATA             "l4d2_vscript_purifier_v2"
+#define GAMEDATA_VERSION     12
+#define VPK_RULE_NONE        0
+#define VPK_RULE_WHITELIST   1
+#define VPK_RULE_BLACKLIST   2
+#define VPK_RULE_KEY_MAX     600
+#define VPK_BINDING_KEY_MAX  1300
+#define VPK_BINDING_DONE_KEY "__done"
 
 methodmap GameDataWrapper < GameData
 {
@@ -329,20 +328,9 @@ MRESReturn DTR_PreVScriptServerRunScriptForAllAddons(DHookReturn hReturn, DHookP
     return MRES_Ignored;
 }
 
-MRESReturn DTR_PostVScriptServerRunScriptForAllAddons(DHookReturn hReturn, DHookParam hParams)
-{
-    RestoreAddonListFilterNow("post addon scripts");
-    return MRES_Ignored;
-}
 MRESReturn DTR_PreCDirectorChallengeMode_InitScriptsNonVirtual(DHookReturn hReturn)
 {
     ApplyAddonListFilter();
-    return MRES_Ignored;
-}
-
-MRESReturn DTR_PostCDirectorChallengeMode_InitScriptsNonVirtual(DHookReturn hReturn, DHookParam hParams)
-{
-    RestoreAddonListFilterNow("post challenge scripts");
     return MRES_Ignored;
 }
 
@@ -351,6 +339,12 @@ MRESReturn DTR_PreFileSystem_UpdateAddonSearchPaths(DHookReturn hReturn)
     g_bAddonListUpdateActive  = true;
     g_iAddonListLoadCallCount = 0;
 
+    return MRES_Ignored;
+}
+
+MRESReturn DTR_PreCBaseServer_UpdateGameData()
+{
+    RestoreAddonListFilterNow("DTR_PreCBaseServer_UpdateGameData");
     return MRES_Ignored;
 }
 
@@ -449,11 +443,6 @@ MRESReturn DTR_KeyValues_GetString_Post(Address pKeyValue, DHookReturn hReturn, 
     return MRES_Ignored;
 }
 
-MRESReturn DTR_PreCServerGameDLL_GetMatchmakingGameData(DHookReturn hReturn, DHookParam hParams)
-{
-    return MRES_Ignored;
-}
-
 MRESReturn DTR_PreCScriptConvarAccessor_SetValue(DHookReturn hReturn, DHookParam hParams)
 {
     if (g_iCvarRestore == 2)
@@ -479,6 +468,10 @@ MRESReturn DTR_PreCScriptConvarAccessor_SetValue(DHookReturn hReturn, DHookParam
 bool ApplyAddonListFilter()
 {
     if (g_iCvarSwitch <= 0)
+        return false;
+
+    // 广西南宁 m1换到m2 本插件会导致崩溃 不知道什么原因，不是插件问题，好像是游戏本身的update_addon_path指令的问题
+    if (StrContains(CurrentMapName, "nanningcity", false) != -1)
         return false;
 
     if ((g_hBlockedMissionVpks == null || g_hBlockedMissionVpks.Length == 0) && !HasBlacklistedVpkRules())
@@ -634,7 +627,7 @@ public int MenuHandler_VpkCategory(Menu menu, MenuAction action, int client, int
     }
     else if (action == MenuAction_Cancel)
     {
-        PrintToChat(client, "\x04[VPK]\x01 修改后下次回合重启/脚本加载时生效。");
+        PrintToChat(client, "\x04[VPK]\x01 修改后下次换图后生效。");
     }
     else if (action == MenuAction_End)
     {
@@ -773,7 +766,7 @@ int MenuHandler_VpkRule(Menu menu, MenuAction action, int client, int item)
         if (item == MenuCancel_ExitBack)
             DisplayVpkCategoryMenu(client);
         else
-            PrintToChat(client, "\x04[VPK]\x01 修改后下次回合重启/脚本加载时生效。");
+            PrintToChat(client, "\x04[VPK]\x01 修改后下次换图后生效。");
     }
     else if (action == MenuAction_End)
     {
@@ -2110,11 +2103,11 @@ void InitGameData()
     delete gd.CreateDetourOrFail("KeyValues::GetString", true, _, DTR_KeyValues_GetString_Post);
     delete gd.CreateDetourOrFail("FileSystem_UpdateAddonSearchPaths", true, DTR_PreFileSystem_UpdateAddonSearchPaths, DTR_PostFileSystem_UpdateAddonSearchPaths);
     delete gd.CreateDetourOrFail("LoadAddonListFile", true, _, DTR_LoadAddonListFile_Post);
-    delete gd.CreateDetourOrFail("CServerGameDLL::GetMatchmakingGameData", true, DTR_PreCServerGameDLL_GetMatchmakingGameData);
+    delete gd.CreateDetourOrFail("CBaseServer::UpdateGameData", true, DTR_PreCBaseServer_UpdateGameData);
     delete gd.CreateDetourOrFail("CMatchExtL4D::ParseMissionFromFile", true, DTR_PreParseMissionFromFile, DTR_ParseMissionFromFile_Post);
-    delete gd.CreateDetourOrFail("CDirectorChallengeMode::InitScriptsNonVirtual", true, DTR_PreCDirectorChallengeMode_InitScriptsNonVirtual, DTR_PostCDirectorChallengeMode_InitScriptsNonVirtual);
+    delete gd.CreateDetourOrFail("CDirectorChallengeMode::InitScriptsNonVirtual", true, DTR_PreCDirectorChallengeMode_InitScriptsNonVirtual);
     delete gd.CreateDetourOrFail("CScriptConvarAccessor::SetValue", true, DTR_PreCScriptConvarAccessor_SetValue);
-    delete gd.CreateDetourOrFail("VScriptServerRunScriptForAllAddons", true, DTR_PreVScriptServerRunScriptForAllAddons, DTR_PostVScriptServerRunScriptForAllAddons);
+    delete gd.CreateDetourOrFail("VScriptServerRunScriptForAllAddons", true, DTR_PreVScriptServerRunScriptForAllAddons);
 
     delete gd;
 }
@@ -2198,11 +2191,11 @@ void CheckGameDataFile()
             hFile.WriteLine("				\"windows\"	\"\\x55\\x8B\\xEC\\x83\\xEC\\x10\\x56\\x8B\\xF1\\x8B\\x0D\\x2A\\x2A\\x2A\\x2A\\xE8\\x2A\\x2A\\x2A\\x2A\"");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
-            hFile.WriteLine("			\"CServerGameDLL::GetMatchmakingGameData\"");
+            hFile.WriteLine("			\"CBaseServer::UpdateGameData\"");
             hFile.WriteLine("			{");
-            hFile.WriteLine("				\"library\" \"server\"");
-            hFile.WriteLine("				\"linux\"		\"@_ZN14CServerGameDLL22GetMatchmakingGameDataEPcj\"");
-            hFile.WriteLine("				\"windows\"	\"\\x55\\x8B\\xEC\\x56\\x8B\\x75\\x08\\x57\\x8B\\x7D\\x0C\\x68\\x2A\\x2A\\x2A\\x2A\"");
+            hFile.WriteLine("				\"library\" \"engine\"");
+            hFile.WriteLine("				\"linux\"		\"@_ZN11CBaseServer14UpdateGameDataEv\"");
+            hFile.WriteLine("				\"windows\"	\"\\x55\\x8B\\xEC\\x81\\xEC\\x64\\x01\\x00\\x00\\xA1\\x2A\\x2A\\x2A\\x2A\\x33\\xC5\\x89\\x45\\xFC\\x53\"");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
             hFile.WriteLine("			\"CMatchExtL4D::ParseMissionFromFile\"");
@@ -2385,23 +2378,12 @@ void CheckGameDataFile()
             hFile.WriteLine("				}");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
-            hFile.WriteLine("			\"CServerGameDLL::GetMatchmakingGameData\"");
+            hFile.WriteLine("			\"CBaseServer::UpdateGameData\"");
             hFile.WriteLine("			{");
-            hFile.WriteLine("				\"signature\" \"CServerGameDLL::GetMatchmakingGameData\"");
+            hFile.WriteLine("				\"signature\" \"CBaseServer::UpdateGameData\"");
             hFile.WriteLine("				\"callconv\" \"thiscall\"");
-            hFile.WriteLine("				\"return\" \"int\"");
+            hFile.WriteLine("				\"return\" \"void\"");
             hFile.WriteLine("				\"this\" \"ignore\"");
-            hFile.WriteLine("				\"arguments\"");
-            hFile.WriteLine("				{");
-            hFile.WriteLine("					\"name\"");
-            hFile.WriteLine("					{");
-            hFile.WriteLine("						\"type\" \"charptr\"");
-            hFile.WriteLine("					}");
-            hFile.WriteLine("					\"length\"");
-            hFile.WriteLine("					{");
-            hFile.WriteLine("						\"type\" \"int\"");
-            hFile.WriteLine("					}");
-            hFile.WriteLine("				}");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
             hFile.WriteLine("			\"CScriptConvarAccessor::SetValue\"");
