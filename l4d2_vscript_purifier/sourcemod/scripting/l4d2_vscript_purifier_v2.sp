@@ -6,7 +6,7 @@
 #include <l4d2_source_keyvalues>
 
 #define GAMEDATA             "l4d2_vscript_purifier_v2"
-#define GAMEDATA_VERSION     7
+#define GAMEDATA_VERSION     19
 #define VPK_RULE_NONE        0
 #define VPK_RULE_WHITELIST   1
 #define VPK_RULE_BLACKLIST   2
@@ -529,10 +529,6 @@ bool ApplyAddonListFilter(const char[] reason)
         return false;
 
     if (g_iCvarSwitch <= 0)
-        return false;
-
-    // 广西南宁 m1换到m2 会导致崩溃 排查后发现不是插件和地图的问题，好像是游戏本身的update_addon_path和地图更深层次的反应，因此插件在南宁地图不执行操作
-    if (StrContains(CurrentMapName, "nanningcity", false) != -1)
         return false;
 
     if ((g_hBlockedMissionVpks == null || g_hBlockedMissionVpks.Length == 0) && !HasBlacklistedVpkRules())
@@ -2258,7 +2254,7 @@ void CheckGameDataFile()
             hFile.WriteLine("			{");
             hFile.WriteLine("				\"library\" \"engine\"");
             hFile.WriteLine("				\"linux\"		\"@_ZN13CServerPlugin13LevelShutdownEv\"");
-            hFile.WriteLine("				\"windows\"	\"\\x55\\x8B\\xEC\\x81\\xEC\\x64\\x01\\x00\\x00\\xA1\\x2A\\x2A\\x2A\\x2A\\x33\\xC5\\x89\\x45\\xFC\\x53\"");
+            hFile.WriteLine("				\"windows\"	\"\\x55\\x8B\\xEC\\x51\\x53\\x8B\\x1D\\x2A\\x2A\\x2A\\x2A\\x8B\\x03\"");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
             hFile.WriteLine("			\"CMatchExtL4D::ParseMissionFromFile\"");
