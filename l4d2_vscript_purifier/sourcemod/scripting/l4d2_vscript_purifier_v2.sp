@@ -382,6 +382,7 @@ MRESReturn DTR_PostVScriptServerRunScriptForAllAddons(DHookReturn hReturn, DHook
     if (RestoreAddonListFilterNow("DTR_PostVScriptServerRunScriptForAllAddons scriptedmode/director_base x2"))
     {
         ResetVScriptPairRestoreState();
+        g_bAddonFilterMapReady = false;
     }
     else
     {
