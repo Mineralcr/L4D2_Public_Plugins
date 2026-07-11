@@ -363,9 +363,9 @@ MRESReturn DTR_PreFileSystem_UpdateAddonSearchPaths(DHookReturn hReturn)
 }
 
 
-MRESReturn DTR_PreCServerGameDLL_GetMatchmakingGameData(DHookReturn hReturn, DHookParam hParams)
+MRESReturn DTR_PreCBaseServer_UpdateGameData()
 {
-    RestoreAddonListFilterNow("DTR_PreCServerGameDLL_GetMatchmakingGameData");
+    RestoreAddonListFilterNow("DTR_PreCBaseServer_UpdateGameData");
     return MRES_Ignored;
 }
 
@@ -2127,7 +2127,7 @@ void InitGameData()
     delete gd.CreateDetourOrFail("KeyValues::GetString", true, _, DTR_KeyValues_GetString_Post);
     delete gd.CreateDetourOrFail("FileSystem_UpdateAddonSearchPaths", true, DTR_PreFileSystem_UpdateAddonSearchPaths, DTR_PostFileSystem_UpdateAddonSearchPaths);
     delete gd.CreateDetourOrFail("LoadAddonListFile", true, _, DTR_LoadAddonListFile_Post);
-    delete gd.CreateDetourOrFail("CServerGameDLL::GetMatchmakingGameData", true, DTR_PreCServerGameDLL_GetMatchmakingGameData);
+    delete gd.CreateDetourOrFail("CBaseServer::UpdateGameData", true, DTR_PreCBaseServer_UpdateGameData);
     delete gd.CreateDetourOrFail("CMatchExtL4D::ParseMissionFromFile", true, DTR_PreParseMissionFromFile, DTR_ParseMissionFromFile_Post);
     delete gd.CreateDetourOrFail("CDirectorChallengeMode::InitScriptsNonVirtual", true, DTR_PreCDirectorChallengeMode_InitScriptsNonVirtual);
     delete gd.CreateDetourOrFail("CScriptConvarAccessor::SetValue", true, DTR_PreCScriptConvarAccessor_SetValue);
@@ -2215,11 +2215,11 @@ void CheckGameDataFile()
             hFile.WriteLine("				\"windows\"	\"\\x55\\x8B\\xEC\\x83\\xEC\\x10\\x56\\x8B\\xF1\\x8B\\x0D\\x2A\\x2A\\x2A\\x2A\\xE8\\x2A\\x2A\\x2A\\x2A\"");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
-            hFile.WriteLine("			\"CServerGameDLL::GetMatchmakingGameData\"");
+            hFile.WriteLine("			\"CBaseServer::UpdateGameData\"");
             hFile.WriteLine("			{");
-            hFile.WriteLine("				\"library\" \"server\"");
-            hFile.WriteLine("				\"linux\"		\"@_ZN14CServerGameDLL22GetMatchmakingGameDataEPcj\"");
-            hFile.WriteLine("				\"windows\"	\"\\x55\\x8B\\xEC\\x56\\x8B\\x75\\x08\\x57\\x8B\\x7D\\x0C\\x68\\x2A\\x2A\\x2A\\x2A\"");
+            hFile.WriteLine("				\"library\" \"engine\"");
+            hFile.WriteLine("				\"linux\"		\"@_ZN11CBaseServer14UpdateGameDataEv\"");
+            hFile.WriteLine("				\"windows\"	\"\\x55\\x8B\\xEC\\x81\\xEC\\x64\\x01\\x00\\x00\\xA1\\x2A\\x2A\\x2A\\x2A\\x33\\xC5\\x89\\x45\\xFC\\x53\"");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
             hFile.WriteLine("			\"CMatchExtL4D::ParseMissionFromFile\"");
@@ -2402,23 +2402,12 @@ void CheckGameDataFile()
             hFile.WriteLine("				}");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
-            hFile.WriteLine("			\"CServerGameDLL::GetMatchmakingGameData\"");
+            hFile.WriteLine("			\"CBaseServer::UpdateGameData\"");
             hFile.WriteLine("			{");
-            hFile.WriteLine("				\"signature\" \"CServerGameDLL::GetMatchmakingGameData\"");
+            hFile.WriteLine("				\"signature\" \"CBaseServer::UpdateGameData\"");
             hFile.WriteLine("				\"callconv\" \"thiscall\"");
-            hFile.WriteLine("				\"return\" \"int\"");
+            hFile.WriteLine("				\"return\" \"void\"");
             hFile.WriteLine("				\"this\" \"ignore\"");
-            hFile.WriteLine("				\"arguments\"");
-            hFile.WriteLine("				{");
-            hFile.WriteLine("					\"name\"");
-            hFile.WriteLine("					{");
-            hFile.WriteLine("						\"type\" \"charptr\"");
-            hFile.WriteLine("					}");
-            hFile.WriteLine("					\"length\"");
-            hFile.WriteLine("					{");
-            hFile.WriteLine("						\"type\" \"int\"");
-            hFile.WriteLine("					}");
-            hFile.WriteLine("				}");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
             hFile.WriteLine("			\"CScriptConvarAccessor::SetValue\"");
