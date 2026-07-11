@@ -6,7 +6,7 @@
 #include <l4d2_source_keyvalues>
 
 #define GAMEDATA             "l4d2_vscript_purifier_v2"
-#define GAMEDATA_VERSION     13
+#define GAMEDATA_VERSION     17
 #define VPK_RULE_NONE        0
 #define VPK_RULE_WHITELIST   1
 #define VPK_RULE_BLACKLIST   2
