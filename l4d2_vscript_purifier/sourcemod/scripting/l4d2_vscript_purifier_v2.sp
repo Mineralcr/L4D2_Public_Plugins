@@ -90,13 +90,16 @@ bool
     g_bAddonListFilterApplied,
     g_bAddonListRestorePending,
     g_bAddonFilterMapReady,
-    g_bExecutingUpdateAddonPaths;
+    g_bExecutingUpdateAddonPaths,
+    g_bVScriptPairRestorePending;
 
 int
     g_iCvarSwitch,
     g_iCvarRestore,
     g_iBlacklistedRuleCount,
     g_iAddonListLoadCallCount,
+    g_iVScriptScriptedModeCount,
+    g_iVScriptDirectorBaseCount,
     g_iGbkUnicodeMap[65536];
 
 StringMap
@@ -174,6 +177,7 @@ public void OnPluginStart()
 
 public void OnMapEnd()
 {
+    ResetVScriptPairRestoreState();
     g_bAddonFilterMapReady = false;
     RestoreAddonListFilterNow("OnMapEnd");
 }
@@ -207,7 +211,8 @@ public void OnClientDisconnect(int client)
 public void OnMapInit(const char[] mapName)
 {
     g_bAddonFilterMapReady = false;
-    
+    ResetVScriptPairRestoreState();
+
     delete g_hContentList;
     delete g_hBlockedMissionVpks;
     delete g_hAllowedMapVpks;
@@ -276,7 +281,7 @@ public void OnMapInit(const char[] mapName)
         g_hBlockedMissionVpks.Erase(0);
 
     g_bAddonFilterMapReady = true;
-    g_bAllowCall = true;
+    g_bAllowCall           = true;
 
     Call_VeryEarly();
 }
@@ -307,6 +312,13 @@ void ExecConfigsEarly()
     ServerCommand("exec sourcemod/l4d2_vscript_purifier_v2.cfg");
     ServerExecute();
     UpdateCvars();
+}
+
+void ResetVScriptPairRestoreState()
+{
+    g_iVScriptScriptedModeCount  = 0;
+    g_iVScriptDirectorBaseCount  = 0;
+    g_bVScriptPairRestorePending = false;
 }
 
 void Call_VeryEarly()
@@ -344,7 +356,38 @@ void RestoreConvarDefault()
 
 MRESReturn DTR_PreVScriptServerRunScriptForAllAddons(DHookReturn hReturn, DHookParam hParams)
 {
+    char key[64];
+
+    if (!DHookIsNullParam(hParams, 1))
+        DHookGetParamString(hParams, 1, key, sizeof(key));
+
     ApplyAddonListFilter("DTR_PreVScriptServerRunScriptForAllAddons");
+
+    if (StrEqual(key, "scriptedmode", false))
+        g_iVScriptScriptedModeCount++;
+    else if (StrEqual(key, "director_base", false))
+        g_iVScriptDirectorBaseCount++;
+
+    if (g_iVScriptScriptedModeCount >= 2 && g_iVScriptDirectorBaseCount >= 2)
+        g_bVScriptPairRestorePending = true;
+
+    return MRES_Ignored;
+}
+
+MRESReturn DTR_PostVScriptServerRunScriptForAllAddons(DHookReturn hReturn, DHookParam hParams)
+{
+    if (!g_bVScriptPairRestorePending)
+        return MRES_Ignored;
+
+    if (RestoreAddonListFilterNow("DTR_PostVScriptServerRunScriptForAllAddons scriptedmode/director_base x2"))
+    {
+        ResetVScriptPairRestoreState();
+    }
+    else
+    {
+        g_bVScriptPairRestorePending = false;
+    }
+
     return MRES_Ignored;
 }
 
@@ -359,13 +402,6 @@ MRESReturn DTR_PreFileSystem_UpdateAddonSearchPaths(DHookReturn hReturn)
     g_bAddonListUpdateActive  = true;
     g_iAddonListLoadCallCount = 0;
 
-    return MRES_Ignored;
-}
-
-
-MRESReturn DTR_PreCBaseServer_UpdateGameData()
-{
-    RestoreAddonListFilterNow("DTR_PreCBaseServer_UpdateGameData");
     return MRES_Ignored;
 }
 
@@ -490,7 +526,7 @@ bool ApplyAddonListFilter(const char[] reason)
 {
     if (!g_bAddonFilterMapReady)
         return false;
-        
+
     if (g_iCvarSwitch <= 0)
         return false;
 
@@ -508,6 +544,8 @@ bool ApplyAddonListFilter(const char[] reason)
 
     g_bAddonListFilterArmed    = true;
     g_bAddonListRestorePending = false;
+
+    ResetVScriptPairRestoreState();
 
     SaveLastFilterTargets();
 
@@ -2127,11 +2165,10 @@ void InitGameData()
     delete gd.CreateDetourOrFail("KeyValues::GetString", true, _, DTR_KeyValues_GetString_Post);
     delete gd.CreateDetourOrFail("FileSystem_UpdateAddonSearchPaths", true, DTR_PreFileSystem_UpdateAddonSearchPaths, DTR_PostFileSystem_UpdateAddonSearchPaths);
     delete gd.CreateDetourOrFail("LoadAddonListFile", true, _, DTR_LoadAddonListFile_Post);
-    delete gd.CreateDetourOrFail("CBaseServer::UpdateGameData", true, DTR_PreCBaseServer_UpdateGameData);
     delete gd.CreateDetourOrFail("CMatchExtL4D::ParseMissionFromFile", true, DTR_PreParseMissionFromFile, DTR_ParseMissionFromFile_Post);
     delete gd.CreateDetourOrFail("CDirectorChallengeMode::InitScriptsNonVirtual", true, DTR_PreCDirectorChallengeMode_InitScriptsNonVirtual);
     delete gd.CreateDetourOrFail("CScriptConvarAccessor::SetValue", true, DTR_PreCScriptConvarAccessor_SetValue);
-    delete gd.CreateDetourOrFail("VScriptServerRunScriptForAllAddons", true, DTR_PreVScriptServerRunScriptForAllAddons);
+    delete gd.CreateDetourOrFail("VScriptServerRunScriptForAllAddons", true, DTR_PreVScriptServerRunScriptForAllAddons, DTR_PostVScriptServerRunScriptForAllAddons);
 
     delete gd;
 }
