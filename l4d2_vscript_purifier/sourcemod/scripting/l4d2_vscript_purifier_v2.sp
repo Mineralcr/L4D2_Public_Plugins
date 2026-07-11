@@ -6,7 +6,7 @@
 #include <l4d2_source_keyvalues>
 
 #define GAMEDATA             "l4d2_vscript_purifier_v2"
-#define GAMEDATA_VERSION     17
+#define GAMEDATA_VERSION     7
 #define VPK_RULE_NONE        0
 #define VPK_RULE_WHITELIST   1
 #define VPK_RULE_BLACKLIST   2
@@ -173,13 +173,6 @@ public void OnPluginStart()
 
     HookEvent("round_start_pre_entity", Event_PreRoundStart, EventHookMode_PostNoCopy);
     HookEvent("round_freeze_end", Event_PostRoundStart, EventHookMode_PostNoCopy);
-}
-
-public void OnMapEnd()
-{
-    ResetVScriptPairRestoreState();
-    g_bAddonFilterMapReady = false;
-    RestoreAddonListFilterNow("OnMapEnd");
 }
 
 public void OnServerEnterHibernation()
@@ -382,7 +375,6 @@ MRESReturn DTR_PostVScriptServerRunScriptForAllAddons(DHookReturn hReturn, DHook
     if (RestoreAddonListFilterNow("DTR_PostVScriptServerRunScriptForAllAddons scriptedmode/director_base x2"))
     {
         ResetVScriptPairRestoreState();
-        g_bAddonFilterMapReady = false;
     }
     else
     {
@@ -498,6 +490,14 @@ MRESReturn DTR_KeyValues_GetString_Post(Address pKeyValue, DHookReturn hReturn, 
             g_bFoundVpk = true;
     }
 
+    return MRES_Ignored;
+}
+
+MRESReturn DTR_PreCServerPlugin_LevelShutdown(Address CServerPlugin)
+{
+    ResetVScriptPairRestoreState();
+    g_bAddonFilterMapReady = false;
+    RestoreAddonListFilterNow("CServerPlugin::LevelShutdown");
     return MRES_Ignored;
 }
 
@@ -2169,6 +2169,7 @@ void InitGameData()
     delete gd.CreateDetourOrFail("CMatchExtL4D::ParseMissionFromFile", true, DTR_PreParseMissionFromFile, DTR_ParseMissionFromFile_Post);
     delete gd.CreateDetourOrFail("CDirectorChallengeMode::InitScriptsNonVirtual", true, DTR_PreCDirectorChallengeMode_InitScriptsNonVirtual);
     delete gd.CreateDetourOrFail("CScriptConvarAccessor::SetValue", true, DTR_PreCScriptConvarAccessor_SetValue);
+    delete gd.CreateDetourOrFail("CServerPlugin::LevelShutdown", true, DTR_PreCServerPlugin_LevelShutdown);
     delete gd.CreateDetourOrFail("VScriptServerRunScriptForAllAddons", true, DTR_PreVScriptServerRunScriptForAllAddons, DTR_PostVScriptServerRunScriptForAllAddons);
 
     delete gd;
@@ -2253,10 +2254,10 @@ void CheckGameDataFile()
             hFile.WriteLine("				\"windows\"	\"\\x55\\x8B\\xEC\\x83\\xEC\\x10\\x56\\x8B\\xF1\\x8B\\x0D\\x2A\\x2A\\x2A\\x2A\\xE8\\x2A\\x2A\\x2A\\x2A\"");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
-            hFile.WriteLine("			\"CBaseServer::UpdateGameData\"");
+            hFile.WriteLine("			\"CServerPlugin::LevelShutdown\"");
             hFile.WriteLine("			{");
             hFile.WriteLine("				\"library\" \"engine\"");
-            hFile.WriteLine("				\"linux\"		\"@_ZN11CBaseServer14UpdateGameDataEv\"");
+            hFile.WriteLine("				\"linux\"		\"@_ZN13CServerPlugin13LevelShutdownEv\"");
             hFile.WriteLine("				\"windows\"	\"\\x55\\x8B\\xEC\\x81\\xEC\\x64\\x01\\x00\\x00\\xA1\\x2A\\x2A\\x2A\\x2A\\x33\\xC5\\x89\\x45\\xFC\\x53\"");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
@@ -2440,12 +2441,12 @@ void CheckGameDataFile()
             hFile.WriteLine("				}");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
-            hFile.WriteLine("			\"CBaseServer::UpdateGameData\"");
+            hFile.WriteLine("			\"CServerPlugin::LevelShutdown\"");
             hFile.WriteLine("			{");
-            hFile.WriteLine("				\"signature\" \"CBaseServer::UpdateGameData\"");
+            hFile.WriteLine("				\"signature\" \"CServerPlugin::LevelShutdown\"");
             hFile.WriteLine("				\"callconv\" \"thiscall\"");
             hFile.WriteLine("				\"return\" \"void\"");
-            hFile.WriteLine("				\"this\" \"ignore\"");
+            hFile.WriteLine("				\"this\" \"address\"");
             hFile.WriteLine("			}");
             hFile.WriteLine("");
             hFile.WriteLine("			\"CScriptConvarAccessor::SetValue\"");
