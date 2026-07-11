@@ -112,7 +112,7 @@ public Plugin myinfo =
     name        = "l4d2_vscript_purifier_v2",
     author      = "洛琪, Forgetest",
     description = "防止地图脚本污染",
-    version     = "2.2",
+    version     = "2.3",
     url         = "https://steamcommunity.com/profiles/76561198812009299/"
 };
 
@@ -180,6 +180,18 @@ public void OnPluginEnd()
 
     for (int i = 1; i <= MaxClients; i++)
         ClearClientBindingSelection(i);
+    
+    RestoreAddonListFilterNow("OnPluginEnd");
+}
+
+public void OnMapEnd()
+{
+    RestoreAddonListFilterNow("OnMapEnd");
+}
+
+public void OnServerEnterHibernation()
+{
+    RestoreAddonListFilterNow("OnServerEnterHibernation");
 }
 
 public void OnClientDisconnect(int client)
@@ -293,7 +305,7 @@ void Call_VeryEarly()
 {
     if (!g_bAllowCall)
         return;
-
+    
     RestoreConvarDefault();
 
     delete g_hChangedCvars;
@@ -324,13 +336,13 @@ void RestoreConvarDefault()
 
 MRESReturn DTR_PreVScriptServerRunScriptForAllAddons(DHookReturn hReturn, DHookParam hParams)
 {
-    ApplyAddonListFilter();
+    ApplyAddonListFilter("DTR_PreVScriptServerRunScriptForAllAddons");
     return MRES_Ignored;
 }
 
 MRESReturn DTR_PreCDirectorChallengeMode_InitScriptsNonVirtual(DHookReturn hReturn)
 {
-    ApplyAddonListFilter();
+    ApplyAddonListFilter("DTR_PreCDirectorChallengeMode_InitScriptsNonVirtual");
     return MRES_Ignored;
 }
 
@@ -465,12 +477,12 @@ MRESReturn DTR_PreCScriptConvarAccessor_SetValue(DHookReturn hReturn, DHookParam
     return MRES_Ignored;
 }
 
-bool ApplyAddonListFilter()
+bool ApplyAddonListFilter(const char[] reason)
 {
     if (g_iCvarSwitch <= 0)
         return false;
 
-    // 广西南宁 m1换到m2 本插件会导致崩溃 不知道什么原因，不是插件问题，好像是游戏本身的update_addon_path指令的问题
+    // 广西南宁 m1换到m2 会导致崩溃 排查后发现不是插件和地图的问题，好像是游戏本身的update_addon_path和地图更深层次的反应，因此插件在南宁地图不执行操作
     if (StrContains(CurrentMapName, "nanningcity", false) != -1)
         return false;
 
@@ -487,7 +499,7 @@ bool ApplyAddonListFilter()
 
     SaveLastFilterTargets();
 
-    if (!ExecuteUpdateAddonPaths("apply memory filter"))
+    if (!ExecuteUpdateAddonPaths(reason))
     {
         g_bAddonListFilterArmed = false;
         return false;
@@ -577,7 +589,7 @@ bool ExecuteUpdateAddonPaths(const char[] reason)
     g_bExecutingUpdateAddonPaths = true;
     ServerCommand("update_addon_paths");
     ServerExecute();
-    LogMessage("update addon paths reason: %s", reason);
+    LogMessage("update addon paths reason: %s Time %f", reason, GetEngineTime());
     g_bExecutingUpdateAddonPaths = false;
 
     return true;
