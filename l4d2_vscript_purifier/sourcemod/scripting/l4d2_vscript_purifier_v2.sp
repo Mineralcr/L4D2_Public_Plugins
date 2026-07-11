@@ -89,6 +89,7 @@ bool
     g_bGbkMapLoaded,
     g_bAddonListFilterApplied,
     g_bAddonListRestorePending,
+    g_bAddonFilterMapReady,
     g_bExecutingUpdateAddonPaths;
 
 int
@@ -112,7 +113,7 @@ public Plugin myinfo =
     name        = "l4d2_vscript_purifier_v2",
     author      = "洛琪, Forgetest",
     description = "防止地图脚本污染",
-    version     = "2.3",
+    version     = "2.4",
     url         = "https://steamcommunity.com/profiles/76561198812009299/"
 };
 
@@ -171,8 +172,22 @@ public void OnPluginStart()
     HookEvent("round_freeze_end", Event_PostRoundStart, EventHookMode_PostNoCopy);
 }
 
+public void OnMapEnd()
+{
+    g_bAddonFilterMapReady = false;
+    RestoreAddonListFilterNow("OnMapEnd");
+}
+
+public void OnServerEnterHibernation()
+{
+    g_bAddonFilterMapReady = false;
+    RestoreAddonListFilterNow("OnServerEnterHibernation");
+}
+
 public void OnPluginEnd()
 {
+    g_bAddonFilterMapReady = false;
+
     delete g_hVpkRules;
     g_hVpkRules = null;
 
@@ -180,18 +195,8 @@ public void OnPluginEnd()
 
     for (int i = 1; i <= MaxClients; i++)
         ClearClientBindingSelection(i);
-    
+
     RestoreAddonListFilterNow("OnPluginEnd");
-}
-
-public void OnMapEnd()
-{
-    RestoreAddonListFilterNow("OnMapEnd");
-}
-
-public void OnServerEnterHibernation()
-{
-    RestoreAddonListFilterNow("OnServerEnterHibernation");
 }
 
 public void OnClientDisconnect(int client)
@@ -201,6 +206,8 @@ public void OnClientDisconnect(int client)
 
 public void OnMapInit(const char[] mapName)
 {
+    g_bAddonFilterMapReady = false;
+    
     delete g_hContentList;
     delete g_hBlockedMissionVpks;
     delete g_hAllowedMapVpks;
@@ -268,6 +275,7 @@ public void OnMapInit(const char[] mapName)
     if (!isOfficialMap && g_hBlockedMissionVpks.Length > 0)
         g_hBlockedMissionVpks.Erase(0);
 
+    g_bAddonFilterMapReady = true;
     g_bAllowCall = true;
 
     Call_VeryEarly();
@@ -480,6 +488,9 @@ MRESReturn DTR_PreCScriptConvarAccessor_SetValue(DHookReturn hReturn, DHookParam
 
 bool ApplyAddonListFilter(const char[] reason)
 {
+    if (!g_bAddonFilterMapReady)
+        return false;
+        
     if (g_iCvarSwitch <= 0)
         return false;
 
